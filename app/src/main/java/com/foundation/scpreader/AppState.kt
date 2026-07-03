@@ -66,7 +66,11 @@ class AppState(
     var activeTags by mutableStateOf(listOf<String>())
     var searchFiltersOpen by mutableStateOf(false)
     var searchSort by mutableStateOf(SortMode.Relevance)
+    var audioOnly by mutableStateOf(false)
     var libTab by mutableStateOf("all")
+
+    // Full-screen narration player overlay.
+    var playerFullScreen by mutableStateOf(false)
 
     var randomType by mutableStateOf(RandomType.Scp)
     var randomMode by mutableStateOf(RandomMode.Pool)
@@ -231,11 +235,13 @@ class AppState(
         }
     }
 
-    /** Reset all search filters (type/class/tags) back to their defaults. */
+    /** Reset all search filters (type/class/tags/audio) back to their defaults. */
     fun clearSearchFilters() {
-        typeFilter = "all"; classFilter = "any"; activeTags = emptyList()
+        typeFilter = "all"; classFilter = "any"; activeTags = emptyList(); audioOnly = false
         applySearchFilters()
     }
+
+    fun toggleAudioOnly() { audioOnly = !audioOnly; applySearchFilters() }
 
     fun selectSearchSort(m: SortMode) { searchSort = m; applySearchFilters() }
 
@@ -248,7 +254,8 @@ class AppState(
                 (typeFilter == "tale" && item.typeLabel == "Tale") ||
                 (typeFilter == "goi" && item.typeLabel == "GoI")) &&
                 (classFilter == "any" || item.objectClass == classFilter) &&
-                (activeTags.isEmpty() || activeTags.any { item.tags.contains(it) })
+                (activeTags.isEmpty() || activeTags.any { item.tags.contains(it) }) &&
+                (!audioOnly || item.podcast)
         }
         searchResults = when (searchSort) {
             SortMode.Relevance -> filtered // keep the search's own relevance order
@@ -353,8 +360,37 @@ class AppState(
 
     // ---- podcast ----
     fun episodeForReader(): Episode? = readerItem?.let { repo.episodeFor(it) }
-    fun playReaderNarration() { episodeForReader()?.let { player.play(it) } }
-    fun play(episode: Episode) { player.play(episode) }
+    fun playReaderNarration() { episodeForReader()?.let { playWithResume(it) } }
+    fun play(episode: Episode) { playWithResume(episode) }
+
+    /** Start an episode from its last-saved position (0 if none / finished). */
+    private fun playWithResume(episode: Episode) {
+        viewModelScope.launch { player.play(episode, repo.resumePosition(episode.audioUrl)) }
+    }
+
+    // ---- full-screen player ----
+    fun openPlayer() { if (player.state.value.hasContent) playerFullScreen = true }
+    fun closePlayer() { playerFullScreen = false }
+
+    /** Episodes in a stable order (newest first) for previous/next navigation. */
+    private fun orderedEpisodes(): List<Episode> = episodes.sortedByDescending { it.publishedMillis }
+
+    private fun currentEpisodeIndex(list: List<Episode>): Int {
+        val url = player.state.value.episode?.audioUrl ?: return -1
+        return list.indexOfFirst { it.audioUrl == url }
+    }
+
+    fun playerNext() {
+        val list = orderedEpisodes()
+        val i = currentEpisodeIndex(list)
+        if (i >= 0 && i + 1 < list.size) playWithResume(list[i + 1])
+    }
+
+    fun playerPrevious() {
+        val list = orderedEpisodes()
+        val i = currentEpisodeIndex(list)
+        if (i > 0) playWithResume(list[i - 1])
+    }
 
     // ---- misc reducers ----
     fun go(s: Screen) {

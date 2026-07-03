@@ -7,6 +7,8 @@ import com.foundation.scpreader.database.DownloadDao
 import com.foundation.scpreader.database.DownloadEntity
 import com.foundation.scpreader.database.RecentDao
 import com.foundation.scpreader.database.RecentEntity
+import com.foundation.scpreader.database.PlaybackPositionDao
+import com.foundation.scpreader.database.PlaybackPositionEntity
 import com.foundation.scpreader.database.SearchRecentDao
 import com.foundation.scpreader.database.SearchRecentEntity
 import com.foundation.scpreader.network.CromApi
@@ -41,6 +43,7 @@ class ScpRepository(
     private val bookmarkDao: BookmarkDao,
     private val recentDao: RecentDao,
     private val searchRecentDao: SearchRecentDao,
+    private val playbackDao: PlaybackPositionDao,
     private val http: OkHttpClient,
     private val filesDir: File,
     private val scope: CoroutineScope,
@@ -131,6 +134,25 @@ class ScpRepository(
     fun episodeFor(item: ScpItem): Episode? {
         val n = Regex("(\\d+)").find(item.number)?.value?.toIntOrNull() ?: return null
         return episodesCache?.firstOrNull { it.scpNumber == n }
+    }
+
+    // ---- playback position (resume across restarts) ----
+    /** Persist the last-known position for an episode. Fire-and-forget on the repo scope. */
+    fun savePlaybackPosition(audioUrl: String, positionMs: Long, durationMs: Long) {
+        if (audioUrl.isBlank() || positionMs <= 0) return
+        scope.launch {
+            playbackDao.upsert(PlaybackPositionEntity(audioUrl, positionMs.coerceAtLeast(0), durationMs.coerceAtLeast(0), now()))
+        }
+    }
+
+    /**
+     * The position to resume [audioUrl] from. Returns 0 when nothing is saved, or when the saved
+     * spot is within 5s of the end (so a finished episode restarts instead of resuming at the tail).
+     */
+    suspend fun resumePosition(audioUrl: String): Long {
+        val row = playbackDao.get(audioUrl) ?: return 0
+        if (row.durationMs > 0 && row.positionMs >= row.durationMs - 5_000) return 0
+        return row.positionMs.coerceAtLeast(0)
     }
 
     // ---- downloads ----

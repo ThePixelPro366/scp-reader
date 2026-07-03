@@ -60,7 +60,7 @@ fun MiniPlayer(app: AppState) {
                         null, Modifier.size(22.dp), tint = c.onPrimary,
                     )
                 }
-                Column(Modifier.weight(1f)) {
+                Column(Modifier.weight(1f).clickable { app.openPlayer() }) {
                     Text(ep?.title ?: "", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
                         if (state.buffering) "Buffering…" else "${fmt(state.positionMs)} / ${fmt(state.durationMs)}",

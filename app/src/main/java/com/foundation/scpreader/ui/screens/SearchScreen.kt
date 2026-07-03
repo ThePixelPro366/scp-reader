@@ -59,7 +59,7 @@ fun SearchScreen(app: AppState) {
     val c = LocalScpScheme.current
     val suggestions = app.searchSuggestions
     val results = app.searchResults
-    val filtersActive = app.typeFilter != "all" || app.classFilter != "any" || app.activeTags.isNotEmpty()
+    val filtersActive = app.typeFilter != "all" || app.classFilter != "any" || app.activeTags.isNotEmpty() || app.audioOnly
 
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 108.dp)) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)) {
@@ -167,7 +167,7 @@ private val searchTypeDefs = listOf("all" to "All", "scp" to "SCP", "tale" to "T
 @Composable
 private fun FilterSheet(app: AppState) {
     val c = LocalScpScheme.current
-    val filtersActive = app.typeFilter != "all" || app.classFilter != "any" || app.activeTags.isNotEmpty()
+    val filtersActive = app.typeFilter != "all" || app.classFilter != "any" || app.activeTags.isNotEmpty() || app.audioOnly
     Dialog(onDismissRequest = { app.searchFiltersOpen = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier.padding(horizontal = 24.dp).fillMaxWidth().clip(RoundedCornerShape(26.dp))
@@ -189,6 +189,13 @@ private fun FilterSheet(app: AppState) {
                     val st = c.chipStyle(active)
                     FilterChip(label, active, st.bg, st.fg, st.border) { app.setType(k) }
                 }
+            }
+
+            SectionLabel("Availability")
+            FilterFlow {
+                val active = app.audioOnly
+                val st = c.chipStyle(active)
+                FilterChip("Narration available", active, st.bg, st.fg, st.border) { app.toggleAudioOnly() }
             }
 
             SectionLabel("Object class")

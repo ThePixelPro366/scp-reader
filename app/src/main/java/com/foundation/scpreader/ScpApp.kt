@@ -51,13 +51,19 @@ class AppContainer(context: Context) {
         bookmarkDao = db.bookmarkDao(),
         recentDao = db.recentDao(),
         searchRecentDao = db.searchRecentDao(),
+        playbackDao = db.playbackPositionDao(),
         http = http,
         filesDir = context.filesDir,
         scope = appScope,
         isUnmetered = ::isUnmetered,
     )
 
-    val player = PlayerController(context, appScope)
+    val player = PlayerController(context, appScope).also { pc ->
+        // Persist playback position so an episode resumes where it was left off.
+        pc.onPositionPersist = { audioUrl, positionMs, durationMs ->
+            repository.savePlaybackPosition(audioUrl, positionMs, durationMs)
+        }
+    }
 }
 
 class ScpApp : Application() {

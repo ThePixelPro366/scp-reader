@@ -58,10 +58,11 @@ interface DownloadDao {
     suspend fun delete(url: String)
 }
 
-@Database(entities = [DownloadEntity::class, BookmarkEntity::class, RecentEntity::class, SearchRecentEntity::class], version = 4, exportSchema = false)
+@Database(entities = [DownloadEntity::class, BookmarkEntity::class, RecentEntity::class, SearchRecentEntity::class, PlaybackPositionEntity::class], version = 5, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun downloadDao(): DownloadDao
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun recentDao(): RecentDao
     abstract fun searchRecentDao(): SearchRecentDao
+    abstract fun playbackPositionDao(): PlaybackPositionDao
 }

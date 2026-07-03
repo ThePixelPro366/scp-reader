@@ -119,8 +119,9 @@ private fun AppRoot(app: AppState) {
     val c = LocalScpScheme.current
 
     // Hardware back navigates within the app instead of exiting from a sub-screen.
-    BackHandler(enabled = app.randomOpen || app.readerItem != null || app.screen != Screen.Home) {
+    BackHandler(enabled = app.playerFullScreen || app.randomOpen || app.readerItem != null || app.screen != Screen.Home) {
         when {
+            app.playerFullScreen -> app.closePlayer()
             app.randomOpen -> app.randomOpen = false
             app.readerItem != null -> app.closeReader()
             else -> app.go(Screen.Home)
@@ -157,6 +158,7 @@ private fun AppRoot(app: AppState) {
 
         app.readerItem?.let { item -> ReaderScreen(app, item) }
         if (app.randomOpen) RandomSheet(app)
+        if (app.playerFullScreen) com.foundation.scpreader.ui.screens.PlayerScreen(app)
 
         // Cold-start access screen: stays until the app is actually ready (not a fixed timer),
         // with a safety fallback so it never hangs.

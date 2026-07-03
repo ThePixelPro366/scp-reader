@@ -20,11 +20,14 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Downloading
 import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.HideImage
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.LightMode
@@ -35,6 +38,8 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sell
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SignalCellularAlt
@@ -88,4 +93,9 @@ object AppIcons {
     val Bolt = Icons.Filled.Bolt
     val Pause = Icons.Filled.Pause
     val KeyboardArrowUp = Icons.Filled.KeyboardArrowUp
+    val KeyboardArrowDown = Icons.Filled.KeyboardArrowDown
+    val FastForward = Icons.Filled.FastForward
+    val FastRewind = Icons.Filled.FastRewind
+    val SkipNext = Icons.Filled.SkipNext
+    val SkipPrevious = Icons.Filled.SkipPrevious
 }
