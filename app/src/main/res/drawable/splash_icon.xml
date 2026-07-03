@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Intentionally blank: keeps the cold-start system splash a plain white screen
+     (no colored default launcher icon) so it flows straight into the access-granted screen. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path android:fillColor="#00FFFFFF" android:pathData="M0,0h48v48h-48z" />
+</vector>

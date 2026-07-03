@@ -1,0 +1,23 @@
+# Android / Gradle
+*.iml
+.gradle/
+build/
+/local.properties
+/captures
+.externalNativeBuild/
+.cxx/
+
+# IDE
+.idea/
+.DS_Store
+
+# Build artifacts / signing
+*.apk
+*.aab
+*.keystore
+*.jks
+keystore.properties
+
+# Local tooling and the original mockup (not part of the app)
+.kotlin/
+scp-offline-app-mockup/
