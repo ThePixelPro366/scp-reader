@@ -84,7 +84,7 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
     val (classBg, classText) = classColors(item.objectClass, app.isDark)
     val episode = app.episodeForReader()
     val playback by app.player.state.collectAsStateWithLifecycle()
-    val thisPlaying = episode != null && playback.episode?.audioUrl == episode.audioUrl && playback.isPlaying
+    val thisPlaying = episode != null && playback.episode?.mediaId == episode.mediaId && playback.isPlaying
 
     val offlineLabel = when (dl.state) {
         ReaderDlState.Done -> if (dl.audio) "Article + audio" else "Article"

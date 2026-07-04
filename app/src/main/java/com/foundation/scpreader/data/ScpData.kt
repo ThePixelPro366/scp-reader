@@ -69,15 +69,32 @@ data class Article(
     val crosslinks: List<ScpItem> = emptyList(),
 )
 
-/** A narration episode from the SCP Archives podcast feed. */
+/** Where a narration comes from. YouTube (@scparchives) is primary; the Apple feed is fallback. */
+enum class NarrationSource { YOUTUBE, PODCAST }
+
+/**
+ * A narration episode. [audioUrl] is a *resolved / playable* URI and may be ephemeral (YouTube
+ * stream URLs expire) — it is NOT a stable identity. Use [mediaId] as the stable key for playback
+ * identity, resume position, downloads and SponsorBlock lookups.
+ */
 data class Episode(
     val title: String,
-    val audioUrl: String,
+    val audioUrl: String,    // resolved playable URI (direct MP3 for podcast; ephemeral for YouTube)
     val durationSec: Int,
     val scpNumber: Int?,     // parsed from the title when present, e.g. 173
     val publishedMillis: Long,
     val imageUrl: String? = null,
-)
+    val source: NarrationSource = NarrationSource.PODCAST,
+    val videoId: String? = null,   // YouTube video id when source == YOUTUBE
+    val localPath: String? = null, // local audio file once downloaded
+) {
+    /** Stable, source-tagged identity. YouTube: "yt:<videoId>"; podcast: "pod:<audioUrl>". */
+    val mediaId: String
+        get() = when (source) {
+            NarrationSource.YOUTUBE -> "yt:" + (videoId ?: audioUrl)
+            NarrationSource.PODCAST -> "pod:" + audioUrl
+        }
+}
 
 /** Object-class + type derivation from a page's wikidot tags. */
 object Taxonomy {

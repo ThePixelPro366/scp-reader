@@ -235,6 +235,19 @@ fun SettingsScreen(app: AppState) {
             }
         }
 
+        // ---- SponsorBlock ----
+        GroupLabel("SponsorBlock")
+        SettingsCard {
+            Text("Auto-skip segments", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 4.dp))
+            Text("Skip these parts of YouTube narrations (crowd-sourced)", fontSize = 13.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 6.dp))
+            com.foundation.scpreader.playback.SponsorCategory.ALL.forEach { cat ->
+                Divider1()
+                ToggleRow(AppIcons.FastForward, com.foundation.scpreader.playback.SponsorCategory.label(cat), null, app.sponsorCategories.contains(cat)) {
+                    app.toggleSponsorCategory(cat)
+                }
+            }
+        }
+
         Text(
             "Content licensed CC BY-SA 3.0 · scp-wiki.wikidot.com",
             fontSize = 12.sp, lineHeight = 19.sp, color = c.onSurfaceVariant, textAlign = TextAlign.Center,

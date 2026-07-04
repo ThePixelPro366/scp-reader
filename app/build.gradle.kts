@@ -25,6 +25,8 @@ android {
         }
     }
     compileOptions {
+        // NewPipeExtractor uses java.time etc.; desugaring backports them to minSdk 24/25.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -67,10 +69,11 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
 
-    // Media3 / ExoPlayer (podcast playback)
+    // Media3 / ExoPlayer (playback) + Transformer (offline SponsorBlock trim/clip+concat)
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-session:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
+    implementation("androidx.media3:media3-transformer:1.4.1")
 
     // Image loading (SCP figures)
     implementation("io.coil-kt:coil-compose:2.7.0")
@@ -80,4 +83,13 @@ dependencies {
 
     // Core splashscreen (kills the white cold-start flash)
     implementation("androidx.core:core-splashscreen:1.0.1")
+
+    // YouTube stream extraction (keyless). Primary narration source (@scparchives).
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.3")
+
+    // Backports java.time/stream APIs NewPipeExtractor relies on to minSdk 24/25.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
+
+    // Unit test (headless stream-resolution checkpoint; not shipped in the APK)
+    testImplementation("junit:junit:4.13.2")
 }

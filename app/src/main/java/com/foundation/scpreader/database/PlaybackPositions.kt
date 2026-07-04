@@ -8,12 +8,13 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 
 /**
- * The last-known playback position for a narration episode, keyed by its audio URL (stable across
- * sessions). Lets the player resume where the user left off after the app is closed and reopened.
+ * The last-known playback position for a narration episode, keyed by its stable [mediaId]
+ * (source-tagged, e.g. "pod:<audioUrl>" or "yt:<videoId>"). Lets the player resume where the user
+ * left off after the app is closed and reopened, independent of ephemeral stream URLs.
  */
 @Entity(tableName = "playback_positions")
 data class PlaybackPositionEntity(
-    @PrimaryKey val audioUrl: String,
+    @PrimaryKey val mediaId: String,
     val positionMs: Long,
     val durationMs: Long,   // 0 if unknown; used to reset near-complete episodes
     val updatedAt: Long,
@@ -21,8 +22,8 @@ data class PlaybackPositionEntity(
 
 @Dao
 interface PlaybackPositionDao {
-    @Query("SELECT * FROM playback_positions WHERE audioUrl = :audioUrl")
-    suspend fun get(audioUrl: String): PlaybackPositionEntity?
+    @Query("SELECT * FROM playback_positions WHERE mediaId = :mediaId")
+    suspend fun get(mediaId: String): PlaybackPositionEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: PlaybackPositionEntity)

@@ -27,8 +27,16 @@ class AppContainer(context: Context) {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    init {
+        // Initialise YouTube extraction with our OkHttp-backed downloader (safe to call once, early).
+        org.schabi.newpipe.extractor.NewPipe.init(com.foundation.scpreader.network.NewPipeDownloader(http))
+    }
+
+    /** Resolves YouTube video ids to fresh audio stream URLs (ephemeral, short-TTL cached). */
+    val streamResolver = com.foundation.scpreader.playback.StreamResolver()
+
     private val db = Room.databaseBuilder(context, AppDatabase::class.java, "scp-reader.db")
-        .fallbackToDestructiveMigration()
+        .addMigrations(com.foundation.scpreader.database.MIGRATION_5_6)
         .build()
 
     private val appContext = context.applicationContext
@@ -43,10 +51,31 @@ class AppContainer(context: Context) {
 
     val settingsStore = SettingsStore(appContext)
 
+    /** Narration source layer: YouTube (@scparchives) primary, Apple podcast fallback. */
+    private val narration = com.foundation.scpreader.data.NarrationRepository(
+        youTube = com.foundation.scpreader.network.YouTubeSource("UC4_byDtwX_vNI1TNnj0l59A"),
+        podcast = PodcastApi(http),
+        indexDao = db.narrationIndexDao(),
+        downloadDao = db.downloadDao(),
+        streamResolver = streamResolver,
+        scope = appScope,
+    )
+
+    /** SponsorBlock: fetch/cache skip segments for YouTube videos. */
+    private val sponsor = com.foundation.scpreader.playback.SponsorBlockController(
+        api = com.foundation.scpreader.network.SponsorBlockApi(http),
+        dao = db.sponsorSegmentDao(),
+    )
+
+    /** Media3 Transformer wrapper that physically removes SponsorBlock segments from downloads. */
+    private val audioTrimmer = com.foundation.scpreader.playback.AudioTrimmer(appContext)
+
     val repository = ScpRepository(
         crom = CromApi(http),
         scraper = ScpScraper(),
-        podcast = PodcastApi(http),
+        narration = narration,
+        sponsor = sponsor,
+        audioTrimmer = audioTrimmer,
         dao = db.downloadDao(),
         bookmarkDao = db.bookmarkDao(),
         recentDao = db.recentDao(),
@@ -60,8 +89,8 @@ class AppContainer(context: Context) {
 
     val player = PlayerController(context, appScope).also { pc ->
         // Persist playback position so an episode resumes where it was left off.
-        pc.onPositionPersist = { audioUrl, positionMs, durationMs ->
-            repository.savePlaybackPosition(audioUrl, positionMs, durationMs)
+        pc.onPositionPersist = { mediaId, positionMs, durationMs ->
+            repository.savePlaybackPosition(mediaId, positionMs, durationMs)
         }
     }
 }

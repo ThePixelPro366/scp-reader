@@ -26,6 +26,7 @@ data class Settings(
     val autoDownloadBookmarks: Boolean = false,
     val excludedClasses: Set<String> = emptySet(),
     val heroMode: HeroMode = HeroMode.ContinueReading,
+    val sponsorCategories: Set<String> = com.foundation.scpreader.playback.SponsorCategory.DEFAULT_ENABLED,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -43,6 +44,7 @@ class SettingsStore(private val context: Context) {
         val autoDl = booleanPreferencesKey("auto_dl_bookmarks")
         val excluded = stringSetPreferencesKey("excluded_classes")
         val hero = stringPreferencesKey("hero_mode")
+        val sponsorCats = stringSetPreferencesKey("sponsor_categories")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { p ->
@@ -57,6 +59,7 @@ class SettingsStore(private val context: Context) {
             autoDownloadBookmarks = p[Keys.autoDl] ?: false,
             excludedClasses = p[Keys.excluded] ?: emptySet(),
             heroMode = p[Keys.hero]?.let { runCatching { HeroMode.valueOf(it) }.getOrNull() } ?: HeroMode.ContinueReading,
+            sponsorCategories = p[Keys.sponsorCats] ?: com.foundation.scpreader.playback.SponsorCategory.DEFAULT_ENABLED,
         )
     }
 
@@ -72,6 +75,7 @@ class SettingsStore(private val context: Context) {
             p[Keys.autoDl] = s.autoDownloadBookmarks
             p[Keys.excluded] = s.excludedClasses
             p[Keys.hero] = s.heroMode.name
+            p[Keys.sponsorCats] = s.sponsorCategories
         }
     }
 }

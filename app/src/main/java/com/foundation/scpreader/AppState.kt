@@ -59,6 +59,7 @@ class AppState(
     var wifiOnly by mutableStateOf(true)
     var downloadPref by mutableStateOf(DownloadPref.Ask)
     var autoDownloadBookmarks by mutableStateOf(false)
+    var sponsorCategories by mutableStateOf(com.foundation.scpreader.playback.SponsorCategory.DEFAULT_ENABLED)
 
     var searchQuery by mutableStateOf("")
     var typeFilter by mutableStateOf("all")
@@ -84,6 +85,10 @@ class AppState(
 
     var downloadsPaused by mutableStateOf(false)
     var readerMenuOpen by mutableStateOf(false)
+
+    // Transient one-line player notice (fallback reason / "skipped sponsor"); auto-clears.
+    var playerNotice by mutableStateOf<String?>(null); private set
+    private var noticeJob: Job? = null
 
     // ---- live data ----
     var feed by mutableStateOf<List<ScpItem>>(emptyList()); private set
@@ -122,11 +127,21 @@ class AppState(
         get() = themeMode == ThemeMode.Dark || (themeMode == ThemeMode.Auto && systemDark)
 
     init {
+        // Surface a transient toast whenever the player auto-skips a SponsorBlock segment.
+        player.onSponsorSkipped = { category ->
+            notice("Skipped ${com.foundation.scpreader.playback.SponsorCategory.label(category).lowercase()}")
+        }
+        // A YouTube stream URL expired mid-playback: re-extract a fresh one and resume in place.
+        player.onSourceError = { episode, positionMs -> reResolveAndResume(episode, positionMs) }
+        // Surface background audio-download stage failures as a transient notice.
+        repo.onDownloadNotice = { message -> notice(message) }
         viewModelScope.launch { repo.downloads.collect { downloads = it; redecorate() } }
         viewModelScope.launch { repo.bookmarks.collect { bookmarks = it; bookmarkedUrls = it.map { b -> b.url }.toSet() } }
         viewModelScope.launch { repo.recents.collect { recentlyViewed = repo.decorate(it) } }
         viewModelScope.launch { repo.searchRecents.collect { searchRecentlyViewed = repo.decorate(it) } }
         viewModelScope.launch { repo.tagVocab.collect { tagVocab = it } }
+        // Redecorate feed/search whenever narration availability changes (e.g. after YouTube sync).
+        viewModelScope.launch { repo.availability.collect { redecorate() } }
         viewModelScope.launch { episodes = repo.episodes(); redecorate() }
         // Load persisted settings first, then kick off the feed/hero, then persist future changes.
         viewModelScope.launch {
@@ -143,12 +158,13 @@ class AppState(
         fontScale = s.fontScale; loadImages = s.loadImages; wifiOnly = s.wifiOnly
         downloadPref = s.downloadPref; autoDownloadBookmarks = s.autoDownloadBookmarks
         excludedClasses = s.excludedClasses; heroMode = s.heroMode
+        sponsorCategories = s.sponsorCategories
         repo.setWifiOnly(s.wifiOnly)
     }
 
     private fun currentSettings() = Settings(
         themeMode, dynamicColor, seed, fontScale, loadImages, wifiOnly,
-        downloadPref, autoDownloadBookmarks, excludedClasses, heroMode,
+        downloadPref, autoDownloadBookmarks, excludedClasses, heroMode, sponsorCategories,
     )
 
     private fun daySeed(): Long {
@@ -322,7 +338,7 @@ class AppState(
 
     fun startDownload(audio: Boolean) {
         readerMenuOpen = false
-        readerItem?.let { repo.enqueue(it, audio) }
+        readerItem?.let { repo.enqueue(it, audio, sponsorCategories) }
     }
 
     private fun readerHasEpisode(): Boolean = episodeForReader() != null
@@ -363,9 +379,58 @@ class AppState(
     fun playReaderNarration() { episodeForReader()?.let { playWithResume(it) } }
     fun play(episode: Episode) { playWithResume(episode) }
 
-    /** Start an episode from its last-saved position (0 if none / finished). */
+    /**
+     * Resolve a concrete playable URI (local file → YouTube stream → Apple MP3), then start it from
+     * its last-saved position and apply SponsorBlock segments. The resolved episode may differ from
+     * [episode] if a YouTube video was missing/unextractable and we fell back to Apple.
+     */
     private fun playWithResume(episode: Episode) {
-        viewModelScope.launch { player.play(episode, repo.resumePosition(episode.audioUrl)) }
+        // Same episode already loaded → just toggle (avoids a needless re-resolve/network hit).
+        if (player.state.value.episode?.mediaId == episode.mediaId) { player.togglePlayPause(); return }
+        viewModelScope.launch {
+            val playable = repo.resolvePlayable(episode)
+            if (playable == null) { notice("Narration unavailable"); return@launch }
+            playable.fallbackReason?.let { notice(it) }
+            val resolved = playable.episode
+            val pos = repo.resumePosition(resolved.mediaId)
+            player.play(resolved, playable.uri, pos, playable.origin, playable.cleaned)
+            // Live SponsorBlock skipping applies ONLY to YouTube streaming. A downloaded file is
+            // either already trimmed (clean) or, if trim failed, left as-is — either way its
+            // timestamps wouldn't match the original, so we never live-skip a local file.
+            val vid = resolved.videoId
+            val segments = if (playable.origin == com.foundation.scpreader.playback.PlaybackOrigin.YOUTUBE && vid != null)
+                runCatching { repo.sponsorSegments(vid, sponsorCategories) }.getOrDefault(emptyList())
+            else emptyList()
+            player.setSponsorSegments(resolved.mediaId, segments)
+        }
+    }
+
+    /** Re-extract a fresh YouTube URL after an expiry error and resume [episode] at [positionMs]. */
+    private fun reResolveAndResume(episode: Episode, positionMs: Long) {
+        viewModelScope.launch {
+            episode.videoId?.let { repo.invalidateStream(it) }
+            val playable = repo.resolvePlayable(episode)
+            if (playable == null) { notice("Playback failed"); return@launch }
+            playable.fallbackReason?.let { notice(it) }
+            val resolved = playable.episode
+            player.play(resolved, playable.uri, positionMs, playable.origin, playable.cleaned, forceReload = true)
+            val vid = resolved.videoId
+            val segments = if (playable.origin == com.foundation.scpreader.playback.PlaybackOrigin.YOUTUBE && vid != null)
+                runCatching { repo.sponsorSegments(vid, sponsorCategories) }.getOrDefault(emptyList())
+            else emptyList()
+            player.setSponsorSegments(resolved.mediaId, segments)
+        }
+    }
+
+    /** Show a transient one-line player notice; auto-clears after a couple of seconds. */
+    private fun notice(message: String) {
+        playerNotice = message
+        noticeJob?.cancel()
+        noticeJob = viewModelScope.launch { kotlinx.coroutines.delay(2600); playerNotice = null }
+    }
+
+    fun toggleSponsorCategory(category: String) {
+        sponsorCategories = if (category in sponsorCategories) sponsorCategories - category else sponsorCategories + category
     }
 
     // ---- full-screen player ----
@@ -376,8 +441,8 @@ class AppState(
     private fun orderedEpisodes(): List<Episode> = episodes.sortedByDescending { it.publishedMillis }
 
     private fun currentEpisodeIndex(list: List<Episode>): Int {
-        val url = player.state.value.episode?.audioUrl ?: return -1
-        return list.indexOfFirst { it.audioUrl == url }
+        val id = player.state.value.episode?.mediaId ?: return -1
+        return list.indexOfFirst { it.mediaId == id }
     }
 
     fun playerNext() {

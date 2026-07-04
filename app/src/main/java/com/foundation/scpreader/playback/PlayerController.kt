@@ -2,6 +2,7 @@ package com.foundation.scpreader.playback
 
 import android.content.Context
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.foundation.scpreader.data.Episode
@@ -20,6 +21,9 @@ data class PlaybackState(
     val positionMs: Long = 0,
     val durationMs: Long = 0,
     val buffering: Boolean = false,
+    val origin: PlaybackOrigin? = null,   // where the audio actually came from (for the debug badge)
+    val segments: List<SkipSegment> = emptyList(), // active skip segments (for seek-bar markers)
+    val cleaned: Boolean = false,         // a downloaded file that already had segments removed
 ) {
     val hasContent: Boolean get() = episode != null
 }
@@ -41,38 +45,100 @@ class PlayerController(context: Context, scope: CoroutineScope) {
                 if (!isPlaying) persistNow()
             }
             override fun onPlaybackStateChanged(playbackState: Int) = push()
+            override fun onPlayerError(error: PlaybackException) {
+                // A YouTube stream URL can expire mid-playback. Re-resolve once and resume.
+                val ep = _state.value.episode ?: return
+                if (currentOrigin == PlaybackOrigin.YOUTUBE && !reResolveTried) {
+                    reResolveTried = true
+                    onSourceError?.invoke(ep, lastPositionMs)
+                }
+            }
         })
     }
 
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
-    /** Set by the DI container to persist positions; (audioUrl, positionMs, durationMs). */
+    /** Set by the DI container to persist positions; (mediaId, positionMs, durationMs). */
     var onPositionPersist: ((String, Long, Long) -> Unit)? = null
+
+    /** Invoked with the category each time a SponsorBlock segment is auto-skipped. */
+    var onSponsorSkipped: ((String) -> Unit)? = null
+
+    /** Invoked when a YouTube source errors out (e.g. expired URL); (episode, lastPositionMs). */
+    var onSourceError: ((Episode, Long) -> Unit)? = null
+
+    private var currentOrigin: PlaybackOrigin? = null
+    private var currentCleaned = false
+    // Last good playback position, so a re-resolve after an expiry error can resume in place.
+    @Volatile private var lastPositionMs = 0L
+    @Volatile private var lastDurationMs = 0L
+    // One re-resolve attempt per media load, to avoid an error→re-resolve→error loop.
+    private var reResolveTried = false
+    // SponsorBlock skip segments for the current media (guarded by [sponsorMediaId]).
+    @Volatile private var sponsorSegments: List<SkipSegment> = emptyList()
+    @Volatile private var sponsorMediaId: String? = null
 
     init {
         // Progress ticker on the main thread while something is loaded; also persists
-        // position periodically (~every 5s) so an unexpected process death loses little.
+        // position periodically (~every 5s) so an unexpected process death loses little,
+        // and applies SponsorBlock skips.
         mainScope.launch {
             var ticks = 0
             while (true) {
                 if (player.isPlaying || player.playbackState == Player.STATE_READY) push()
-                if (player.isPlaying && ++ticks >= 10) { persistNow(); ticks = 0 }
+                if (player.isPlaying) {
+                    maybeSkipSponsor()
+                    if (++ticks >= 10) { persistNow(); ticks = 0 }
+                }
                 delay(500)
             }
         }
     }
 
-    fun play(episode: Episode, startPositionMs: Long = 0) {
+    /** If the current position sits inside an enabled skip segment, jump past it. */
+    private fun maybeSkipSponsor() {
+        val segs = sponsorSegments
+        if (segs.isEmpty()) return
+        val dur = player.duration
+        val pos = player.currentPosition
+        // Use an effective end clamped to duration, and require >300ms left, so an outro that ends
+        // at/after the media end doesn't trigger a repeated end-seek + repeated "skipped" toast.
+        val seg = segs.firstOrNull {
+            val end = if (dur > 0) minOf(it.endMs, dur) else it.endMs
+            pos >= it.startMs && pos < end - 300
+        } ?: return
+        player.seekTo(if (dur > 0) seg.endMs.coerceAtMost(dur) else seg.endMs)
+        onSponsorSkipped?.invoke(seg.category)
+    }
+
+    /** Apply skip segments for [mediaId] (ignored if the current media has since changed). */
+    fun setSponsorSegments(mediaId: String, segments: List<SkipSegment>) {
+        if (mediaId == sponsorMediaId) { sponsorSegments = segments; push() }
+    }
+
+    /**
+     * Start [episode], playing from [playableUri] (a resolved local file or fresh stream URL).
+     * Identity, resume and prev/next all key on [Episode.mediaId], not the ephemeral URI.
+     */
+    fun play(episode: Episode, playableUri: String, startPositionMs: Long = 0, origin: PlaybackOrigin? = null, cleaned: Boolean = false, forceReload: Boolean = false) {
         val current = _state.value.episode
-        if (current?.audioUrl == episode.audioUrl) { togglePlayPause(); return }
-        // Capture the outgoing episode's position before switching tracks.
-        persistNow()
-        player.setMediaItem(MediaItem.fromUri(episode.audioUrl))
+        // Same media already loaded → just toggle, UNLESS this is a forced reload (expiry re-resolve).
+        if (!forceReload && current?.mediaId == episode.mediaId) { togglePlayPause(); return }
+        // Capture the outgoing episode's position before switching tracks (skip on self-reload).
+        if (!forceReload) persistNow()
+        currentOrigin = origin
+        currentCleaned = cleaned
+        // Fresh media gets a new retry budget; a forced reload keeps the "already tried" guard.
+        if (!forceReload) { reResolveTried = false; lastPositionMs = 0L; lastDurationMs = 0L }
+        // New media: clear old segments until the caller supplies this episode's.
+        sponsorMediaId = episode.mediaId
+        sponsorSegments = emptyList()
+        player.setMediaItem(MediaItem.fromUri(playableUri))
         player.prepare()
         if (startPositionMs > 0) player.seekTo(startPositionMs)
         player.playWhenReady = true
-        _state.value = PlaybackState(episode = episode, isPlaying = true, positionMs = startPositionMs.coerceAtLeast(0), buffering = true)
+        _state.value = PlaybackState(episode = episode, isPlaying = true, positionMs = startPositionMs.coerceAtLeast(0), buffering = true, origin = origin, cleaned = cleaned)
     }
 
     fun togglePlayPause() {
@@ -97,6 +163,10 @@ class PlayerController(context: Context, scope: CoroutineScope) {
     fun stop() {
         persistNow()
         player.stop(); player.clearMediaItems()
+        currentOrigin = null
+        currentCleaned = false
+        sponsorMediaId = null
+        sponsorSegments = emptyList()
         _state.value = PlaybackState()
     }
 
@@ -104,17 +174,25 @@ class PlayerController(context: Context, scope: CoroutineScope) {
     private fun persistNow() {
         val ep = _state.value.episode ?: return
         val pos = player.currentPosition
-        if (pos > 0) onPositionPersist?.invoke(ep.audioUrl, pos, player.duration.coerceAtLeast(0))
+        // Prefer the last known real duration so a save made before duration was known doesn't
+        // store 0 (which would defeat the near-end "restart instead of resume at tail" reset).
+        val dur = player.duration.coerceAtLeast(0).takeIf { it > 0 } ?: lastDurationMs
+        if (pos > 0) onPositionPersist?.invoke(ep.mediaId, pos, dur)
     }
 
     private fun push() {
         val ep = _state.value.episode ?: return
+        if (player.currentPosition > 0) lastPositionMs = player.currentPosition
+        if (player.duration > 0) lastDurationMs = player.duration
         _state.value = PlaybackState(
             episode = ep,
             isPlaying = player.isPlaying,
             positionMs = player.currentPosition.coerceAtLeast(0),
             durationMs = player.duration.coerceAtLeast(0),
             buffering = player.playbackState == Player.STATE_BUFFERING,
+            origin = currentOrigin,
+            segments = sponsorSegments,
+            cleaned = currentCleaned,
         )
     }
 }

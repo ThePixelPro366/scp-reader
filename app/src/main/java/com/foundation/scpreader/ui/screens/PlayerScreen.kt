@@ -109,6 +109,22 @@ fun PlayerScreen(app: AppState) {
                 lineHeight = 25.sp, modifier = Modifier.fillMaxWidth(),
             )
 
+            // Source badge (debug): where this audio actually came from.
+            com.foundation.scpreader.ui.components.playbackOriginLabel(state.origin, state.cleaned)?.let { label ->
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                        .clip(RoundedCornerShape(6.dp)).background(c.surfaceCHigh).padding(horizontal = 10.dp, vertical = 3.dp),
+                )
+            }
+
+            // Transient notice (fallback reason / skipped sponsor).
+            app.playerNotice?.let { n ->
+                Spacer(Modifier.height(8.dp))
+                Text(n, fontSize = 12.sp, color = c.primary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            }
+
             Spacer(Modifier.height(24.dp))
 
             // Seek bar.
@@ -126,7 +142,14 @@ fun PlayerScreen(app: AppState) {
                 ),
                 modifier = Modifier.fillMaxWidth(),
             )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            // SponsorBlock segment markers (YouTube streaming only; trimmed downloads have none).
+            if (state.origin == com.foundation.scpreader.playback.PlaybackOrigin.YOUTUBE && state.segments.isNotEmpty()) {
+                com.foundation.scpreader.ui.components.SegmentBar(
+                    state.segments, state.durationMs, 5.dp,
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                )
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(fmt(shownPositionMs), fontFamily = Mono, fontSize = 12.sp, color = c.onSurfaceVariant)
                 Text(if (state.buffering) "Buffering…" else fmt(state.durationMs), fontFamily = Mono, fontSize = 12.sp, color = c.onSurfaceVariant)
             }

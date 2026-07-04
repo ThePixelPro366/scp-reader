@@ -1,5 +1,6 @@
 package com.foundation.scpreader.data
 
+import android.util.Log
 import com.foundation.scpreader.database.BookmarkDao
 import com.foundation.scpreader.database.BookmarkEntity
 import com.foundation.scpreader.database.DlStatus
@@ -12,7 +13,6 @@ import com.foundation.scpreader.database.PlaybackPositionEntity
 import com.foundation.scpreader.database.SearchRecentDao
 import com.foundation.scpreader.database.SearchRecentEntity
 import com.foundation.scpreader.network.CromApi
-import com.foundation.scpreader.network.PodcastApi
 import com.foundation.scpreader.network.ScpScraper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -21,6 +21,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -30,6 +31,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 
+private const val DL_TAG = "ScpDownload"
+
 /**
  * Offline-first repository. Live browse/search/article data comes from CROM + the wiki scraper;
  * the Room [DownloadDao] is the source of truth for saved content, and audio/article bodies are
@@ -38,7 +41,9 @@ import java.io.File
 class ScpRepository(
     private val crom: CromApi,
     private val scraper: ScpScraper,
-    private val podcast: PodcastApi,
+    private val narration: NarrationRepository,
+    private val sponsor: com.foundation.scpreader.playback.SponsorBlockController,
+    private val audioTrimmer: com.foundation.scpreader.playback.AudioTrimmer,
     private val dao: DownloadDao,
     private val bookmarkDao: BookmarkDao,
     private val recentDao: RecentDao,
@@ -54,12 +59,15 @@ class ScpRepository(
     @Volatile private var paused = false
     fun setWifiOnly(enabled: Boolean) { wifiOnly = enabled }
     fun setPaused(value: Boolean) { paused = value }
+
+    /** Set by AppState to surface background audio-download stage failures as a transient notice. */
+    var onDownloadNotice: ((String) -> Unit)? = null
     private val json = Json { ignoreUnknownKeys = true; classDiscriminator = "t" }
     private val blocksSerializer = ListSerializer(ContentBlock.serializer())
+    private val sponsorSerializer = ListSerializer(com.foundation.scpreader.playback.SkipSegment.serializer())
 
-    /** SCP numbers that have a narration episode; drives the `podcast` flag on items. */
-    private val podcastNumbers = MutableStateFlow<Set<Int>>(emptySet())
-    private var episodesCache: List<Episode>? = null
+    /** SCP numbers that have narration available (YouTube ∪ Apple); drives the `podcast` flag. */
+    val availability: StateFlow<Set<Int>> = narration.availability
 
     /** Tag vocabulary observed from loaded items, seeded with a fallback list, for autocomplete. */
     val tagVocab = MutableStateFlow(FALLBACK_TAG_VOCAB.toSortedSet().toList())
@@ -69,8 +77,9 @@ class ScpRepository(
 
     private val downloadedUrls = MutableStateFlow<Set<String>>(emptySet())
 
-    private data class DownloadJob(val url: String, val withAudio: Boolean)
+    private data class DownloadJob(val url: String, val withAudio: Boolean, val categories: Set<String>)
     private val workChannel = Channel<DownloadJob>(Channel.UNLIMITED)
+    private val defaultSponsorCategories = com.foundation.scpreader.playback.SponsorCategory.DEFAULT_ENABLED
 
     init {
         scope.launch { dao.observeAll().collect { list -> downloadedUrls.value = list.filter { it.status == DlStatus.DONE }.map { it.url }.toSet() } }
@@ -122,43 +131,54 @@ class ScpRepository(
     private fun failureBlocks(): List<ContentBlock> =
         listOf(ContentBlock.Paragraph("Couldn't load this article. Check your connection and try again."))
 
-    // ---- podcast ----
+    // ---- narration (YouTube-primary, Apple-fallback) ----
     suspend fun episodes(): List<Episode> {
-        episodesCache?.let { return it }
-        val eps = runCatching { podcast.episodes() }.getOrDefault(emptyList())
-        episodesCache = eps
-        podcastNumbers.value = eps.mapNotNull { it.scpNumber }.toSet()
-        return eps
+        narration.ensureSynced()
+        return narration.orderedEpisodes()
     }
 
     fun episodeFor(item: ScpItem): Episode? {
-        val n = Regex("(\\d+)").find(item.number)?.value?.toIntOrNull() ?: return null
-        return episodesCache?.firstOrNull { it.scpNumber == n }
+        val n = itemNumber(item) ?: return null
+        return narration.episodeFor(n)
     }
 
+    /** Resolve a concrete playable source (local file → YouTube stream → Apple MP3). */
+    suspend fun resolvePlayable(episode: Episode): Playable? = narration.resolvePlayable(episode)
+
+    /** Drop a cached YouTube stream URL so the next resolve re-extracts (after an expiry error). */
+    fun invalidateStream(videoId: String) = narration.invalidateStream(videoId)
+
+    /** SponsorBlock skip segments for a YouTube video, filtered to the [enabled] categories. */
+    suspend fun sponsorSegments(videoId: String, enabled: Set<String>) =
+        sponsor.segmentsFor(videoId, enabled)
+
+    private fun itemNumber(item: ScpItem): Int? = Regex("(\\d+)").find(item.number)?.value?.toIntOrNull()
+
     // ---- playback position (resume across restarts) ----
-    /** Persist the last-known position for an episode. Fire-and-forget on the repo scope. */
-    fun savePlaybackPosition(audioUrl: String, positionMs: Long, durationMs: Long) {
-        if (audioUrl.isBlank() || positionMs <= 0) return
+    /** Persist the last-known position for an episode, keyed by its stable [mediaId]. */
+    fun savePlaybackPosition(mediaId: String, positionMs: Long, durationMs: Long) {
+        if (mediaId.isBlank() || positionMs <= 0) return
         scope.launch {
-            playbackDao.upsert(PlaybackPositionEntity(audioUrl, positionMs.coerceAtLeast(0), durationMs.coerceAtLeast(0), now()))
+            playbackDao.upsert(PlaybackPositionEntity(mediaId, positionMs.coerceAtLeast(0), durationMs.coerceAtLeast(0), now()))
         }
     }
 
     /**
-     * The position to resume [audioUrl] from. Returns 0 when nothing is saved, or when the saved
+     * The position to resume [mediaId] from. Returns 0 when nothing is saved, or when the saved
      * spot is within 5s of the end (so a finished episode restarts instead of resuming at the tail).
      */
-    suspend fun resumePosition(audioUrl: String): Long {
-        val row = playbackDao.get(audioUrl) ?: return 0
+    suspend fun resumePosition(mediaId: String): Long {
+        val row = playbackDao.get(mediaId) ?: return 0
         if (row.durationMs > 0 && row.positionMs >= row.durationMs - 5_000) return 0
         return row.positionMs.coerceAtLeast(0)
     }
 
     // ---- downloads ----
-    fun enqueue(item: ScpItem, withAudio: Boolean) { scope.launch { enqueueNow(item, withAudio) } }
+    fun enqueue(item: ScpItem, withAudio: Boolean, categories: Set<String> = defaultSponsorCategories) {
+        scope.launch { enqueueNow(item, withAudio, categories) }
+    }
 
-    private suspend fun enqueueNow(item: ScpItem, withAudio: Boolean) {
+    private suspend fun enqueueNow(item: ScpItem, withAudio: Boolean, categories: Set<String> = defaultSponsorCategories) {
         val existing = dao.get(item.url)
         if (existing?.status == DlStatus.DONE) return
         dao.upsert(
@@ -169,7 +189,7 @@ class ScpRepository(
                 sizeBytes = 0, status = DlStatus.QUEUED, progress = 0, updatedAt = now(),
             )
         )
-        workChannel.send(DownloadJob(item.url, withAudio))
+        workChannel.send(DownloadJob(item.url, withAudio, categories))
     }
 
     /** Bulk-enqueue the top [count] highest-rated pages for [tag], paginating CROM. */
@@ -334,7 +354,15 @@ class ScpRepository(
     }
 
     private fun startDownloadWorker() = scope.launch {
-        for (job in workChannel) runCatching { process(job) }
+        for (job in workChannel) {
+            runCatching { process(job) }.onFailure { e ->
+                Log.e(DL_TAG, "download failed for ${job.url}", e)
+                onDownloadNotice?.invoke("Download failed")
+                // Never leave a row spinning in ACTIVE/QUEUED: finalize it so the UI settles and
+                // the reader falls back to a live scrape when its blocks weren't saved.
+                runCatching { dao.get(job.url)?.let { dao.updateProgress(job.url, DlStatus.DONE, 100, now()) } }
+            }
+        }
     }
 
     private suspend fun process(job: DownloadJob) {
@@ -351,12 +379,68 @@ class ScpRepository(
         dao.updateProgress(job.url, DlStatus.ACTIVE, if (job.withAudio) 40 else 90, now())
 
         var audioPath: String? = null
+        var mediaId: String? = null
+        var source: String? = null
+        var videoId: String? = null
+        var sponsorRemovedJson: String? = null
         if (job.withAudio) {
-            val ep = episodeFor(item)
-            if (ep != null) {
-                val file = File(filesDir, "audio/${slug(job.url)}.mp3").apply { parentFile?.mkdirs() }
-                val ok = runCatching { downloadFile(ep.audioUrl, file) { pct -> } }.getOrDefault(false)
-                if (ok) { audioPath = file.absolutePath; size += file.length() }
+            // Stage 1: pick + resolve a playable source (local/YouTube/Apple).
+            val ep = itemNumber(item)?.let { narration.episodeFor(it) }
+            val playable = ep?.let {
+                runCatching { narration.resolvePlayable(it) }
+                    .onFailure { e -> Log.e(DL_TAG, "audio resolve failed for ${item.number}", e) }
+                    .getOrNull()
+            }
+            if (ep == null) {
+                Log.w(DL_TAG, "audio: no narration episode for ${item.number}")
+                onDownloadNotice?.invoke("No narration for ${item.number}")
+            } else if (playable == null) {
+                onDownloadNotice?.invoke("Audio extraction failed")
+            } else {
+                // Stage 2: fetch the audio bytes.
+                val raw = File(filesDir, "audio/${slug(job.url)}.audio").apply { parentFile?.mkdirs() }
+                val dl = runCatching { downloadFile(playable.uri, raw) }
+                if (dl.getOrDefault(false)) {
+                    audioPath = raw.absolutePath
+                    // Key the row on the PRIMARY episode (what playback's episodeFor resolves to),
+                    // not the fallback source we actually fetched — otherwise a YouTube→Apple
+                    // fallback download would be stored under "pod:…" and never matched offline
+                    // (playback looks it up by the YouTube "yt:…" mediaId).
+                    mediaId = ep.mediaId
+                    source = ep.source.name
+                    videoId = ep.videoId
+                    // Stage 3: physically remove enabled SponsorBlock segments (YouTube-sourced only),
+                    // so the saved file is already clean and needs no live skipping offline. A trim
+                    // failure is NON-FATAL: we keep the untrimmed audio and the download still succeeds.
+                    val vid = playable.episode.videoId
+                    if (playable.origin == com.foundation.scpreader.playback.PlaybackOrigin.YOUTUBE && vid != null) {
+                        val segs = runCatching { sponsor.segmentsFor(vid, job.categories) }.getOrDefault(emptyList())
+                        if (segs.isEmpty()) {
+                            sponsorRemovedJson = "[]"   // YouTube source, nothing to cut → already clean
+                        } else {
+                            val totalMs = playable.episode.durationSec * 1000L
+                            val keep = com.foundation.scpreader.playback.SponsorTrim.keepRanges(segs, totalMs)
+                            val trimmed = File(filesDir, "audio/${slug(job.url)}.m4a")
+                            val trim = if (keep.isNotEmpty()) {
+                                runCatching { audioTrimmer.trim(raw.absolutePath, trimmed.absolutePath, keep) }
+                            } else Result.success(false)
+                            if (trim.getOrDefault(false)) {
+                                raw.delete()
+                                audioPath = trimmed.absolutePath
+                                sponsorRemovedJson = json.encodeToString(sponsorSerializer, segs)
+                            } else {
+                                Log.w(DL_TAG, "audio trim failed for ${item.number}; keeping untrimmed", trim.exceptionOrNull())
+                                onDownloadNotice?.invoke("Saved audio (trim unavailable)")
+                                runCatching { trimmed.delete() }
+                            }
+                        }
+                    }
+                    size += File(audioPath).length()
+                } else {
+                    Log.e(DL_TAG, "audio byte download failed for ${item.number}", dl.exceptionOrNull())
+                    onDownloadNotice?.invoke("Audio download failed")
+                    runCatching { raw.delete() }
+                }
             }
         }
 
@@ -365,16 +449,18 @@ class ScpRepository(
                 blocksJson = blocksJson, imageUrl = scraped?.imageUrl ?: row.imageUrl,
                 objectClass = if (row.objectClass == "Unknown") scraped?.objectClass ?: row.objectClass else row.objectClass,
                 audioPath = audioPath, hasAudio = audioPath != null, sizeBytes = size,
+                mediaId = mediaId, source = source, videoId = videoId, sponsorSegmentsJson = sponsorRemovedJson,
                 status = DlStatus.DONE, progress = 100, updatedAt = now(),
             )
         )
     }
 
-    private fun downloadFile(url: String, dest: File, onProgress: (Int) -> Unit): Boolean {
-        val req = Request.Builder().url(url).build()
+    /** Streams [url] to [dest]; throws (with the HTTP code) on failure so callers can log the reason. */
+    private fun downloadFile(url: String, dest: File): Boolean {
+        val req = Request.Builder().url(url).header("User-Agent", "SCPReader/0.1").build()
         http.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) return false
-            val body = resp.body ?: return false
+            if (!resp.isSuccessful) throw java.io.IOException("HTTP ${resp.code} fetching audio stream")
+            val body = resp.body ?: throw java.io.IOException("empty audio response body")
             body.byteStream().use { input -> dest.outputStream().use { input.copyTo(it) } }
         }
         return true
@@ -383,7 +469,7 @@ class ScpRepository(
     // ---- helpers ----
     fun decorate(items: List<ScpItem>): List<ScpItem> {
         val done = downloadedUrls.value
-        val pods = podcastNumbers.value
+        val pods = availability.value
         return items.map { it ->
             val n = Regex("(\\d+)").find(it.number)?.value?.toIntOrNull()
             it.copy(downloaded = done.contains(it.url), podcast = it.podcast || (n != null && pods.contains(n)))

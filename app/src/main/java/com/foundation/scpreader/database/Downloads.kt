@@ -38,6 +38,12 @@ data class DownloadEntity(
     val status: String,
     val progress: Int,           // 0..100
     val updatedAt: Long,
+    // Narration source metadata (added in v6; nullable so old rows migrate cleanly).
+    // A null [source] is treated as PODCAST for backward compatibility.
+    val mediaId: String? = null,             // stable episode identity once known
+    val source: String? = null,              // "YOUTUBE" | "PODCAST"
+    val videoId: String? = null,             // YouTube video id when applicable
+    val sponsorSegmentsJson: String? = null, // SponsorBlock segments captured at download time
 )
 
 @Dao
@@ -47,6 +53,9 @@ interface DownloadDao {
 
     @Query("SELECT * FROM downloads WHERE url = :url")
     suspend fun get(url: String): DownloadEntity?
+
+    @Query("SELECT * FROM downloads WHERE mediaId = :mediaId LIMIT 1")
+    suspend fun getByMediaId(mediaId: String): DownloadEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: DownloadEntity)
@@ -58,11 +67,20 @@ interface DownloadDao {
     suspend fun delete(url: String)
 }
 
-@Database(entities = [DownloadEntity::class, BookmarkEntity::class, RecentEntity::class, SearchRecentEntity::class, PlaybackPositionEntity::class], version = 5, exportSchema = false)
+@Database(
+    entities = [
+        DownloadEntity::class, BookmarkEntity::class, RecentEntity::class, SearchRecentEntity::class,
+        PlaybackPositionEntity::class, SponsorSegmentEntity::class, NarrationIndexEntity::class,
+    ],
+    version = 6,
+    exportSchema = false,
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun downloadDao(): DownloadDao
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun recentDao(): RecentDao
     abstract fun searchRecentDao(): SearchRecentDao
     abstract fun playbackPositionDao(): PlaybackPositionDao
+    abstract fun narrationIndexDao(): NarrationIndexDao
+    abstract fun sponsorSegmentDao(): SponsorSegmentDao
 }

@@ -83,7 +83,7 @@ class PodcastApi(private val client: OkHttpClient) {
                                             title = title,
                                             audioUrl = audioUrl,
                                             durationSec = durationSec,
-                                            scpNumber = parseScpNumber(title),
+                                            scpNumber = com.foundation.scpreader.data.parseScpNumber(title),
                                             publishedMillis = pubMillis,
                                         )
                                     )
@@ -99,9 +99,6 @@ class PodcastApi(private val client: OkHttpClient) {
         }
         return episodes
     }
-
-    private fun parseScpNumber(title: String): Int? =
-        Regex("SCP[- ]?0*(\\d{1,5})", RegexOption.IGNORE_CASE).find(title)?.groupValues?.get(1)?.toIntOrNull()
 
     private fun parseDuration(raw: String): Int {
         if (raw.isBlank()) return 0
