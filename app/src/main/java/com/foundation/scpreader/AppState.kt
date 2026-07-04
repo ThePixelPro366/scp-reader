@@ -331,6 +331,26 @@ class AppState(
         }
     }
 
+    /** Open a wiki article URL delivered by an external VIEW intent (tapped link). */
+    fun openFromWikiUrl(raw: String) {
+        val url = raw.trim().replaceFirst("https://", "http://")
+        val slug = url.substringAfterLast('/').substringBefore('#').substringBefore('?').lowercase()
+        // Bare domain / non-article paths: just bring the app to Home.
+        if (slug.isBlank() || slug.contains("wikidot.com") || slug.startsWith("system:") || slug.startsWith("forum")) {
+            go(Screen.Home); return
+        }
+        val isScp = Regex("^scp-\\d+[a-z0-9-]*$").matches(slug)
+        val number = if (isScp) "SCP-" + slug.removePrefix("scp-").uppercase()
+        else slug.replace('-', ' ').replaceFirstChar { it.uppercase() }
+        go(Screen.Home)
+        openReaderItem(
+            ScpItem(
+                url = url, number = number, title = number, objectClass = "Unknown",
+                typeLabel = if (isScp) "SCP" else "Tale", tags = emptyList(),
+            )
+        )
+    }
+
     fun closeReader() { readerItem = null; readerMenuOpen = false; article = null }
 
     fun toggleReaderMenu() { readerMenuOpen = if (readerDl.state == ReaderDlState.Downloading) false else !readerMenuOpen }

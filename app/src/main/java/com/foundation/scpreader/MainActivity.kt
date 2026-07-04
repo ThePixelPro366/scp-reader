@@ -1,5 +1,6 @@
 package com.foundation.scpreader
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -85,6 +86,7 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handleDeepLink(intent)
         setContent {
             val systemDark = isSystemInDarkTheme()
             LaunchedEffect(systemDark) { app.systemDark = systemDark }
@@ -101,6 +103,18 @@ class MainActivity : ComponentActivity() {
                 ProvideScpScheme(scpScheme) { AppRoot(app) }
             }
         }
+    }
+
+    // A wiki link tapped elsewhere re-delivers here (singleTask); open it in the reader.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLink(intent)
+    }
+
+    private fun handleDeepLink(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_VIEW) return
+        intent.data?.toString()?.let { app.openFromWikiUrl(it) }
     }
 }
 
