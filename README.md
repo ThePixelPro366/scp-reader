@@ -21,13 +21,13 @@ save articles to read offline, and play the narration when it's available.
 
 ## Screenshots
 
-| Home | Article | Search |
-| --- | --- | --- |
-| ![Home](screenshots/shot_01.png) | ![Article](screenshots/shot_article.png) | ![Search](screenshots/shot_search.png) |
-
-| Library | Downloads |
-| --- | --- |
-| ![Library](screenshots/shot_library.png) | ![Downloads](screenshots/shot_downloads.png) |
+<p>
+  <img src="screenshots/shot_01.png" width="240" alt="Home" />
+  <img src="screenshots/shot_article.png" width="240" alt="Article" />
+  <img src="screenshots/shot_search.png" width="240" alt="Search" />
+  <img src="screenshots/shot_library.png" width="240" alt="Library" />
+  <img src="screenshots/shot_downloads.png" width="240" alt="Downloads" />
+</p>
 
 ## Building
 
