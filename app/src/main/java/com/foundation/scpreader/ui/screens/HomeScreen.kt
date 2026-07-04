@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -126,6 +127,20 @@ fun HomeScreen(app: AppState) {
         ) {
             Icon(AppIcons.Shuffle, null, Modifier.size(16.dp), tint = c.primary)
             Text("RANDOM ENTRIES", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp, color = c.primary)
+            if (app.feedIsRandom) {
+                Box(Modifier.weight(1f))
+                val active = app.narratedOnly
+                val st = c.chipStyle(active)
+                Row(
+                    Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(st.bg)
+                        .then(if (st.border == Color.Transparent) Modifier else Modifier.border(1.dp, st.border, RoundedCornerShape(16.dp)))
+                        .clickable { app.toggleNarratedOnly() }.padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(AppIcons.Headphones, null, Modifier.size(16.dp), tint = st.fg)
+                    Text("Narrated", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = st.fg)
+                }
+            }
         }
 
         when {

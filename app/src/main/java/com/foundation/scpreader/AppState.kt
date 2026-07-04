@@ -97,6 +97,8 @@ class AppState(
     private var feedRaw = listOf<ScpItem>()
     private var feedCursor: String? = null
     var feedHasMore by mutableStateOf(false); private set
+    /** When on, the random discover feed only surfaces entries that have narration available. */
+    var narratedOnly by mutableStateOf(false); private set
     private var loadedTag = ""
 
     var searchResults by mutableStateOf<List<ScpItem>>(emptyList()); private set
@@ -186,18 +188,21 @@ class AppState(
     }
 
     /** All/SCP → an infinite "Random entries" discover feed; Tales/GoI → ranked CROM listing. */
-    private val feedIsRandom: Boolean get() = typeFilter == "all" || typeFilter == "scp"
+    val feedIsRandom: Boolean get() = typeFilter == "all" || typeFilter == "scp"
 
     fun loadFeed(reset: Boolean = true) {
         if (reset) { feedRaw = emptyList(); feedCursor = null; feed = emptyList() }
         feedLoading = true; feedError = null
         viewModelScope.launch {
             if (feedIsRandom) {
-                runCatching { repo.randomItems(12, excludedClasses) }
+                runCatching { if (narratedOnly) repo.randomNarratedItems(12, excludedClasses) else repo.randomItems(12, excludedClasses) }
                     .onSuccess { items ->
                         feedRaw = (feedRaw + items).distinctBy { it.url }
                         feed = repo.decorate(feedRaw)
-                        feedHasMore = true
+                        // Narrated pool is finite: stop paging once a fetch adds nothing new.
+                        feedHasMore = !narratedOnly || items.isNotEmpty()
+                        if (feedRaw.isEmpty() && narratedOnly)
+                            feedError = "No narrated entries yet — narration may still be syncing. Turn off the Narrated filter to browse everything."
                     }
                     .onFailure { feedError = it.message ?: "Couldn't load random entries" }
             } else {
@@ -234,6 +239,12 @@ class AppState(
         typeFilter = t
         if (screen == Screen.Home) loadFeed()
         applySearchFilters()
+    }
+
+    /** Toggle the "narrated only" filter on the random discover feed. */
+    fun toggleNarratedOnly() {
+        narratedOnly = !narratedOnly
+        if (screen == Screen.Home && feedIsRandom) loadFeed()
     }
 
     // ---- search ----

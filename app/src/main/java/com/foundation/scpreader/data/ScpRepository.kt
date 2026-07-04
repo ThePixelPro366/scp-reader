@@ -283,6 +283,17 @@ class ScpRepository(
         decorate(fetched)
     }
 
+    /** Random SCPs drawn only from the pool that has narration available. */
+    suspend fun randomNarratedItems(count: Int, exclude: Set<String> = emptySet()): List<ScpItem> = coroutineScope {
+        narration.ensureSynced()
+        val pool = availability.value.toList()
+        if (pool.isEmpty()) return@coroutineScope emptyList()
+        val fetched = pool.shuffled().take(count * 3).map { n -> async { fetchNumber(n) } }.awaitAll()
+            .filterNotNull().filter { it.objectClass !in exclude }.take(count)
+        recordTags(fetched)
+        decorate(fetched)
+    }
+
     /** A genuinely random SCP, respecting excluded object classes. */
     suspend fun randomItem(exclude: Set<String> = emptySet()): ScpItem? {
         repeat(12) {

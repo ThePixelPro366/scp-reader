@@ -37,6 +37,9 @@ class AppContainer(context: Context) {
 
     private val db = Room.databaseBuilder(context, AppDatabase::class.java, "scp-reader.db")
         .addMigrations(com.foundation.scpreader.database.MIGRATION_5_6)
+        // 5->6 is preserved above; any older/unknown schema (pre-v5 dev builds) has no
+        // hand-written path, so rebuild rather than crash on open.
+        .fallbackToDestructiveMigration()
         .build()
 
     private val appContext = context.applicationContext
