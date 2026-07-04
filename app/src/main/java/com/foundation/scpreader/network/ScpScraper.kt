@@ -42,12 +42,16 @@ class ScpScraper {
             if (txt.length < 2) null else ContentBlock.Paragraph(txt, inlineSpans(fe))
         }
 
-        // Remove non-article chrome. Collapsible *content* is kept (addenda live there);
-        // only the fold/unfold links are dropped.
+        // Parse the ACS (Anomaly Classification System) bar, if present, before it's stripped.
+        val acs = parseAcs(content)
+
+        // Remove non-article chrome. Collapsibles are turned into structured blocks during the
+        // walk, so we keep `.collapsible-block-link` (its text is the fold title) and drop only
+        // the folded (duplicate) copy.
         content.select(
             "style, script, .code, .page-rate-widget-box, .creditRate, .rate-box-with-credit-button, " +
                 ".licensebox, .license-area, .footer-wikiwalk-nav, #u-credit-view, .modal-container, " +
-                ".collapsible-block-link, .collapsible-block-folded, .footnotes-footer, .info-container, " +
+                ".collapsible-block-folded, .footnotes-footer, .info-container, .anomaly-class-bar, " +
                 ".scp-image-caption-source, .authorlink-wrapper"
         ).remove()
 
@@ -57,48 +61,60 @@ class ScpScraper {
         var firstImage: String? = null
         val seen = HashSet<String>()
 
-        fun addImage(container: Element) {
+        fun addImage(container: Element, out: MutableList<ContentBlock>) {
             val img = container.selectFirst("img") ?: return
             val src = absImage(img) ?: return
             if (!seen.add("img:$src")) return
             if (firstImage == null) firstImage = src
             val caption = container.selectFirst(".scp-image-caption")?.text()?.trim().orEmpty()
-            blocks.add(ContentBlock.Image(src, caption))
+            out.add(ContentBlock.Image(src, caption))
         }
 
-        fun addText(el: Element, bullet: Boolean) {
+        fun addText(el: Element, bullet: Boolean, out: MutableList<ContentBlock>) {
             val t = el.text().trim()
             if (t.length < 2 || isJunk(t) || !seen.add("p:$t")) return
             if (objectClass == null) objectClass = parseObjectClass(t)
             if (excerpt.isEmpty() && !isMetaLine(t) && t.length > 40) excerpt = t.take(180)
             var spans = inlineSpans(el)
             if (bullet) spans = listOf(InlineSpan("•  ")) + spans
-            blocks.add(ContentBlock.Paragraph(if (bullet) "•  $t" else t, spans))
+            out.add(ContentBlock.Paragraph(if (bullet) "•  $t" else t, spans))
         }
 
-        fun addQuote(el: Element) {
+        fun addQuote(el: Element, out: MutableList<ContentBlock>) {
             val t = el.text().trim()
             if (t.length < 2 || isJunk(t) || !seen.add("q:$t")) return
-            blocks.add(ContentBlock.Quote(t, quoteSpans(el)))
+            out.add(ContentBlock.Quote(t, quoteSpans(el)))
         }
 
-        // Recursive, document-order walk so images stay in their in-text position.
-        fun walk(parent: Element) {
+        // Recursive, document-order walk so images stay in their in-text position. Blocks are
+        // appended to [out]; collapsible content recurses into its own list so it can be folded.
+        fun walk(parent: Element, out: MutableList<ContentBlock>) {
             for (child in parent.children()) {
                 val tag = child.tagName()
                 when {
-                    tag == "img" -> { if (child.absUrl("src").startsWith("http")) { seen.add("img:${child.absUrl("src")}"); if (firstImage == null) firstImage = child.absUrl("src"); blocks.add(ContentBlock.Image(child.absUrl("src"), "")) } }
-                    child.hasClass("scp-image-block") || (tag == "div" && child.selectFirst("img") != null && child.text().length < 140) -> addImage(child)
-                    tag.length == 2 && tag[0] == 'h' -> child.text().trim().takeIf { it.isNotEmpty() }?.let { if (seen.add("h:$it")) blocks.add(ContentBlock.Heading(it, inlineSpans(child))) }
-                    tag == "p" -> addText(child, bullet = false)
-                    tag == "blockquote" || (tag == "div" && child.hasClass("blockquote")) -> addQuote(child)
-                    tag == "ul" || tag == "ol" -> child.select("> li").forEach { addText(it, bullet = true) }
-                    tag == "div" -> walk(child) // section / collapsible content — recurse to keep order
+                    child.hasClass("collapsible-block") -> {
+                        val title = child.selectFirst(".collapsible-block-link")?.text()?.trim()
+                            ?.trimStart('+', '►', '▶', '»', ' ')?.trim()
+                            ?.takeIf { it.isNotEmpty() } ?: "Show more"
+                        val body = child.selectFirst(".collapsible-block-unfolded-text")
+                            ?: child.selectFirst(".collapsible-block-content") ?: child
+                        val inner = ArrayList<ContentBlock>()
+                        walk(body, inner)
+                        if (inner.isNotEmpty()) out.add(ContentBlock.Collapsible(title, inner))
+                    }
+                    tag == "img" -> { if (child.absUrl("src").startsWith("http")) { seen.add("img:${child.absUrl("src")}"); if (firstImage == null) firstImage = child.absUrl("src"); out.add(ContentBlock.Image(child.absUrl("src"), "")) } }
+                    child.hasClass("scp-image-block") || (tag == "div" && child.selectFirst("img") != null && child.text().length < 140) -> addImage(child, out)
+                    tag.length == 2 && tag[0] == 'h' -> child.text().trim().takeIf { it.isNotEmpty() }?.let { if (seen.add("h:$it")) out.add(ContentBlock.Heading(it, inlineSpans(child))) }
+                    tag == "p" -> addText(child, bullet = false, out)
+                    tag == "blockquote" || (tag == "div" && child.hasClass("blockquote")) -> addQuote(child, out)
+                    tag == "ul" || tag == "ol" -> child.select("> li").forEach { addText(it, bullet = true, out) }
+                    tag == "div" -> walk(child, out) // section wrapper — recurse to keep order
                     else -> {}
                 }
             }
         }
-        walk(content)
+        if (acs != null) blocks.add(acs)
+        walk(content, blocks)
 
         // Surface footnotes as a trailing section so the in-text reference numbers resolve.
         if (footnoteBlocks.isNotEmpty()) {
@@ -129,37 +145,76 @@ class ScpScraper {
      * identical styling are merged.
      */
     private fun inlineSpans(el: Element): List<InlineSpan> {
-        val out = ArrayList<InlineSpan>()
-        fun walk(node: Node, bold: Boolean, italic: Boolean, underline: Boolean, strike: Boolean, link: String?) {
+        val raw = ArrayList<InlineSpan>()
+        fun walk(node: Node, bold: Boolean, italic: Boolean, underline: Boolean, strike: Boolean, link: String?, redacted: Boolean) {
             when (node) {
                 is TextNode -> {
                     val t = node.text()
-                    if (t.isNotEmpty()) out.add(InlineSpan(t, bold, italic, underline, strike, link))
+                    if (t.isNotEmpty()) raw.add(InlineSpan(t, bold, italic, underline, strike, link, redacted))
                 }
                 is Element -> {
                     val tag = node.tagName()
                     val style = node.attr("style").lowercase()
+                    val cls = node.className().lowercase()
                     val b = bold || tag == "b" || tag == "strong" || style.contains("font-weight: bold") || style.contains("font-weight:bold") || style.contains("font-weight: 7") || style.contains("font-weight: 8") || style.contains("font-weight: 9")
                     val i = italic || tag == "i" || tag == "em" || style.contains("font-style: italic") || style.contains("font-style:italic")
                     val u = underline || tag == "u" || tag == "ins" || style.contains("underline")
                     val s = strike || tag == "s" || tag == "strike" || tag == "del" || style.contains("line-through")
+                    // Blacked-out runs: a "redacted/blackbox" class, or text colored to match a dark background.
+                    val r = redacted || cls.contains("redact") || cls.contains("blackbox") || cls.contains("black-box") ||
+                        (style.contains("background") && (style.contains("black") || style.contains("#000")) && style.contains("color"))
                     // A hyperlink whose href resolves to a real http(s) URL (skips javascript:/anchors).
                     val href = if (tag == "a") node.absUrl("href").takeIf { it.startsWith("http") } else null
-                    for (ch in node.childNodes()) walk(ch, b, i, u, s, href ?: link)
+                    for (ch in node.childNodes()) walk(ch, b, i, u, s, href ?: link, r)
                 }
             }
         }
-        walk(el, false, false, false, false, null)
+        walk(el, false, false, false, false, null, false)
+        // Split literal censored markers ([REDACTED], [DATA EXPUNGED], █ runs) into redacted runs.
+        val out = raw.flatMap { splitRedaction(it) }
         // Coalesce adjacent runs sharing the same styling.
         val merged = ArrayList<InlineSpan>()
         for (sp in out) {
             val last = merged.lastOrNull()
-            if (last != null && last.bold == sp.bold && last.italic == sp.italic && last.underline == sp.underline && last.strike == sp.strike && last.link == sp.link) {
+            if (last != null && last.bold == sp.bold && last.italic == sp.italic && last.underline == sp.underline && last.strike == sp.strike && last.link == sp.link && last.redacted == sp.redacted) {
                 merged[merged.size - 1] = last.copy(text = last.text + sp.text)
             } else merged.add(sp)
         }
-        // If nothing is styled or linked, drop spans entirely — the plain `text` fallback is enough.
-        return if (merged.none { it.bold || it.italic || it.underline || it.strike || it.link != null }) emptyList() else merged
+        // If nothing is styled, linked or redacted, drop spans — the plain `text` fallback is enough.
+        return if (merged.none { it.bold || it.italic || it.underline || it.strike || it.link != null || it.redacted }) emptyList() else merged
+    }
+
+    private val redactionRegex = Regex("(\\[(?:REDACTED|DATA EXPUNGED|EXPUNGED|SCRUBBED)]|█+)", RegexOption.IGNORE_CASE)
+
+    /** Split a span's text on literal censorship markers, flagging those pieces as redacted. */
+    private fun splitRedaction(sp: InlineSpan): List<InlineSpan> {
+        if (sp.redacted || !redactionRegex.containsMatchIn(sp.text)) return listOf(sp)
+        val pieces = ArrayList<InlineSpan>()
+        var last = 0
+        for (m in redactionRegex.findAll(sp.text)) {
+            if (m.range.first > last) pieces.add(sp.copy(text = sp.text.substring(last, m.range.first)))
+            pieces.add(sp.copy(text = m.value, redacted = true))
+            last = m.range.last + 1
+        }
+        if (last < sp.text.length) pieces.add(sp.copy(text = sp.text.substring(last)))
+        return pieces
+    }
+
+    /**
+     * Best-effort parse of the ACS anomaly-classification bar. Returns null unless at least one
+     * class field is found, so articles without an ACS bar are unaffected.
+     */
+    private fun parseAcs(content: Element): ContentBlock.Acs? {
+        val bar = content.selectFirst("div.anomaly-class-bar") ?: return null
+        fun field(vararg sel: String): String? = sel.firstNotNullOfOrNull { s ->
+            bar.selectFirst("$s .type-text")?.text()?.trim()?.takeIf { it.isNotEmpty() }
+        }
+        val containment = field(".contain-class", ".object-class")
+        val disruption = field(".disrupt-class")
+        val risk = field(".risk-class")
+        val secondary = field(".secondary-class")
+        return if (containment == null && disruption == null && risk == null && secondary == null) null
+        else ContentBlock.Acs(containment, disruption, risk, secondary)
     }
 
     /**

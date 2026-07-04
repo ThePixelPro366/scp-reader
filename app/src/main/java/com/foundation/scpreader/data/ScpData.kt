@@ -49,6 +49,7 @@ data class InlineSpan(
     @SerialName("u") val underline: Boolean = false,
     @SerialName("s") val strike: Boolean = false,
     @SerialName("l") val link: String? = null,   // absolute href when this run is a hyperlink
+    @SerialName("r") val redacted: Boolean = false, // censored run — rendered as a tap-to-reveal black bar
 )
 
 /** A structured block of a rendered article, produced by the scraper. */
@@ -60,6 +61,15 @@ sealed interface ContentBlock {
     /** A quoted passage (wiki `<blockquote>`); rendered as an indented, accented box. */
     @Serializable @SerialName("q") data class Quote(val text: String, val spans: List<InlineSpan> = emptyList()) : ContentBlock
     @Serializable @SerialName("img") data class Image(val url: String, val caption: String) : ContentBlock
+    /** A wiki collapsible (`+ Show…`): [title] is the fold label, [blocks] the hidden content. */
+    @Serializable @SerialName("c") data class Collapsible(val title: String, val blocks: List<ContentBlock>) : ContentBlock
+    /** Anomaly Classification System bar; any field may be absent depending on the article. */
+    @Serializable @SerialName("acs") data class Acs(
+        val containment: String? = null,
+        val disruption: String? = null,
+        val risk: String? = null,
+        val secondary: String? = null,
+    ) : ContentBlock
 }
 
 /** Full article detail: the list item, its scraped body, and any crosslinked articles. */

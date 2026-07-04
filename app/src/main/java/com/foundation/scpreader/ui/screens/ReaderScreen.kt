@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -198,22 +199,11 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
 
                     // article body blocks
                     val blocks = app.article?.blocks.orEmpty()
-                    blocks.forEach { block ->
-                        when (block) {
-                            is ContentBlock.Heading -> Text(markup(block.spans, block.text, c.primary, onLink), fontSize = headPx.sp, fontWeight = FontWeight.SemiBold, color = c.primary, modifier = Modifier.padding(top = 24.dp))
-                            is ContentBlock.Paragraph -> Text(markup(block.spans, block.text, c.primary, onLink), fontSize = bodyPx.sp, lineHeight = (bodyPx * 1.62f).sp, color = c.onSurface, modifier = Modifier.padding(top = 12.dp))
-                            is ContentBlock.Quote -> Row(Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.surfaceContainer).height(IntrinsicSize.Min)) {
-                                Box(Modifier.width(4.dp).fillMaxHeight().background(c.primary))
-                                Text(markup(block.spans, block.text, c.primary, onLink), fontSize = bodyPx.sp, lineHeight = (bodyPx * 1.62f).sp, color = c.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
-                            }
-                            is ContentBlock.Image -> if (app.loadImages) {
-                                Column(Modifier.padding(top = 20.dp)) {
-                                    AsyncImage(model = block.url, contentDescription = block.caption, contentScale = ContentScale.FillWidth,
-                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.surfaceCHigh))
-                                    if (block.caption.isNotEmpty()) Text(block.caption, fontSize = 12.sp, fontStyle = FontStyle.Italic, color = c.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-                                }
-                            }
-                        }
+                    // Revealed redaction keys, reset per article.
+                    val revealed = remember(item.url) { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+                    val onReveal: (String) -> Unit = { k -> revealed[k] = revealed[k] != true }
+                    blocks.forEachIndexed { idx, block ->
+                        ArticleBlock(app, block, "b$idx", bodyPx, headPx, onLink, revealed, onReveal)
                     }
                     if (blocks.isEmpty()) {
                         Text("No content available.", fontSize = bodyPx.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 24.dp))
@@ -266,10 +256,29 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
  * Build a styled [AnnotatedString] from scraped inline spans, falling back to plain text.
  * Linked runs become clickable, routed through [onLink]; [linkColor] tints them.
  */
-private fun markup(spans: List<InlineSpan>, fallback: String, linkColor: Color, onLink: (String) -> Unit): AnnotatedString {
+private fun markup(
+    spans: List<InlineSpan>,
+    fallback: String,
+    linkColor: Color,
+    onLink: (String) -> Unit,
+    redactColor: Color = Color.Black,
+    keyPrefix: String = "",
+    revealed: Map<String, Boolean> = emptyMap(),
+    onReveal: (String) -> Unit = {},
+): AnnotatedString {
     if (spans.isEmpty()) return AnnotatedString(fallback)
     return buildAnnotatedString {
-        spans.forEach { s ->
+        spans.forEachIndexed { idx, s ->
+            // Redacted run: a tap-to-reveal black bar (bar hides the text under matching fg/bg).
+            if (s.redacted) {
+                val key = "$keyPrefix#$idx"
+                val isShown = revealed[key] == true
+                val redStyle = if (isShown) SpanStyle(background = redactColor.copy(alpha = 0.18f))
+                else SpanStyle(color = redactColor, background = redactColor)
+                val link = LinkAnnotation.Clickable(tag = key) { onReveal(key) }
+                withLink(link) { withStyle(redStyle) { append(s.text) } }
+                return@forEachIndexed
+            }
             val decoration = when {
                 s.underline && s.strike -> TextDecoration.Underline + TextDecoration.LineThrough
                 s.underline -> TextDecoration.Underline
@@ -295,9 +304,99 @@ private fun markup(spans: List<InlineSpan>, fallback: String, linkColor: Color, 
     }
 }
 
+/** Renders one article block. Recurses for collapsible content, so it must be a composable. */
+@Composable
+private fun ArticleBlock(
+    app: AppState,
+    block: ContentBlock,
+    key: String,
+    bodyPx: Int,
+    headPx: Int,
+    onLink: (String) -> Unit,
+    revealed: Map<String, Boolean>,
+    onReveal: (String) -> Unit,
+) {
+    val c = LocalScpScheme.current
+    when (block) {
+        is ContentBlock.Heading -> Text(markup(block.spans, block.text, c.primary, onLink, c.onSurface, key, revealed, onReveal), fontSize = headPx.sp, fontWeight = FontWeight.SemiBold, color = c.primary, modifier = Modifier.padding(top = 24.dp))
+        is ContentBlock.Paragraph -> Text(markup(block.spans, block.text, c.primary, onLink, c.onSurface, key, revealed, onReveal), fontSize = bodyPx.sp, lineHeight = (bodyPx * 1.62f).sp, color = c.onSurface, modifier = Modifier.padding(top = 12.dp))
+        is ContentBlock.Quote -> Row(Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.surfaceContainer).height(IntrinsicSize.Min)) {
+            Box(Modifier.width(4.dp).fillMaxHeight().background(c.primary))
+            Text(markup(block.spans, block.text, c.primary, onLink, c.onSurface, key, revealed, onReveal), fontSize = bodyPx.sp, lineHeight = (bodyPx * 1.62f).sp, color = c.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+        }
+        is ContentBlock.Image -> if (app.loadImages) {
+            Column(Modifier.padding(top = 20.dp)) {
+                AsyncImage(model = block.url, contentDescription = block.caption, contentScale = ContentScale.FillWidth,
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.surfaceCHigh))
+                if (block.caption.isNotEmpty()) Text(block.caption, fontSize = 12.sp, fontStyle = FontStyle.Italic, color = c.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            }
+        }
+        is ContentBlock.Acs -> AcsBar(block)
+        is ContentBlock.Collapsible -> {
+            var expanded by remember(key) { androidx.compose.runtime.mutableStateOf(false) }
+            Column(Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, c.outlineVariant, RoundedCornerShape(12.dp))) {
+                Row(
+                    Modifier.fillMaxWidth().background(c.surfaceContainer).clickable { expanded = !expanded }.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Icon(if (expanded) AppIcons.KeyboardArrowUp else AppIcons.KeyboardArrowDown, null, Modifier.size(22.dp), tint = c.primary)
+                    Text(block.title, fontSize = (bodyPx - 1).sp, fontWeight = FontWeight.SemiBold, color = c.onSurface, modifier = Modifier.weight(1f))
+                }
+                if (expanded) {
+                    Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp)) {
+                        block.blocks.forEachIndexed { i, inner ->
+                            ArticleBlock(app, inner, "$key.$i", bodyPx, headPx, onLink, revealed, onReveal)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AcsBar(acs: ContentBlock.Acs) {
+    val c = LocalScpScheme.current
+    val fields = listOfNotNull(
+        acs.containment?.let { "Containment" to it },
+        acs.secondary?.let { "Secondary" to it },
+        acs.disruption?.let { "Disruption" to it },
+        acs.risk?.let { "Risk" to it },
+    )
+    if (fields.isEmpty()) return
+    Column(Modifier.padding(top = 20.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.surfaceContainer).padding(14.dp)) {
+        Text("ANOMALY CLASSIFICATION", fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, color = c.primary)
+        Row(Modifier.padding(top = 10.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            fields.forEach { (label, value) ->
+                Column(Modifier.weight(1f)) {
+                    Text(label.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.onSurfaceVariant)
+                    Text(value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.onSurface, modifier = Modifier.padding(top = 2.dp))
+                }
+            }
+        }
+    }
+}
+
 internal fun openUrl(context: android.content.Context, url: String) {
     val https = url.replaceFirst("http://", "https://")
-    runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(https))) }
+    val uri = android.net.Uri.parse(https)
+    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+        .addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+    // We register as a VIEW handler for wiki hosts, so we must target a real browser explicitly —
+    // otherwise this loops back into our own app. Enumerate handlers for a non-wiki URL (a set we
+    // are NOT part of) and pin the intent to one of those browser packages.
+    runCatching {
+        val pm = context.packageManager
+        val probe = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.example.com"))
+            .addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+        val browsers = pm.queryIntentActivities(probe, 0).map { it.activityInfo.packageName }
+        val preferred = pm.resolveActivity(probe, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
+        val browser = listOfNotNull(preferred).plus(browsers)
+            .firstOrNull { it != context.packageName && !it.contains("resolver", true) }
+        if (browser != null) intent.setPackage(browser)
+    }
+    runCatching { context.startActivity(intent) }
+        .onFailure { runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri)) } }
 }
 
 private fun fmtDuration(sec: Int): String {
