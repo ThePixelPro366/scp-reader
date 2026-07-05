@@ -76,7 +76,10 @@ class ScpScraper {
             if (objectClass == null) objectClass = parseObjectClass(t)
             if (excerpt.isEmpty() && !isMetaLine(t) && t.length > 40) excerpt = t.take(180)
             var spans = inlineSpans(el)
-            if (bullet) spans = listOf(InlineSpan("•  ")) + spans
+            // inlineSpans() returns emptyList() for unstyled text (the plain `text` fallback is
+            // enough on its own) — but prepending the bullet marker would make `spans` non-empty
+            // and short-circuit that fallback in markup(), rendering just the bullet with no text.
+            if (bullet) spans = listOf(InlineSpan("•  ")) + spans.ifEmpty { listOf(InlineSpan(t)) }
             out.add(ContentBlock.Paragraph(if (bullet) "•  $t" else t, spans))
         }
 

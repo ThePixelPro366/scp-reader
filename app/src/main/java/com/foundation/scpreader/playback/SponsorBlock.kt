@@ -24,7 +24,7 @@ object SponsorCategory {
     val ALL = listOf(SPONSOR, SELF_PROMO, INTERACTION, INTRO, OUTRO, PREVIEW, MUSIC_OFFTOPIC, FILLER)
 
     /** Skipped by default. */
-    val DEFAULT_ENABLED = setOf(SPONSOR, SELF_PROMO, INTERACTION)
+    val DEFAULT_ENABLED = ALL.toSet()
 
     fun label(category: String): String = when (category) {
         SPONSOR -> "Sponsor"

@@ -17,6 +17,7 @@ save articles to read offline, and play the narration when it's available.
 - Bookmarks and a recently-viewed list
 - Adjustable text size, light/dark/auto themes and dynamic color from your wallpaper
 - Tune discovery: choose the home highlight and exclude object classes from random picks
+- Auto-skip SponsorBlock segments in narrations (sponsor, intro, outro, filler and more)
 - Resumes where you left off
 
 ## Screenshots
@@ -27,6 +28,7 @@ save articles to read offline, and play the narration when it's available.
   <img src="screenshots/shot_search.png" width="240" alt="Search" />
   <img src="screenshots/shot_library.png" width="240" alt="Library" />
   <img src="screenshots/shot_downloads.png" width="240" alt="Downloads" />
+  <img src="screenshots/shot_settings.jpg" width="240" alt="Settings" />
 </p>
 
 ## Building
