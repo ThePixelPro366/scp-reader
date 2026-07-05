@@ -125,12 +125,18 @@ class ScpScraper {
             blocks.addAll(footnoteBlocks)
         }
 
-        // Crosslinks: anchors within the body that point at other SCP articles.
-        val selfSlug = url.substringAfterLast('/')
+        // Crosslinks: anchors within the body that link to another SCP article's wiki *page*.
+        // We require the href to resolve to a bare scp-wiki.wikidot.com/scp-XXXX page rather than
+        // just matching "scp-\d+" anywhere in the URL — image thumbnails link to their full-size
+        // file on scp-wiki.wdfiles.com/local--files/scp-XXXX/..., where XXXX is just the asset's
+        // storage directory (often reused/shared) and unrelated to any article the page mentions.
+        val selfSlug = url.substringAfterLast('/').lowercase()
+        val pageLinkRegex = Regex("^scp-wiki\\.wikidot\\.com/(scp-\\d+[a-z0-9-]*)/?$", RegexOption.IGNORE_CASE)
         val crosslinks = LinkedHashMap<String, String>()
         for (a in content.select("a[href]")) {
             val href = a.absUrl("href").ifBlank { a.attr("href") }
-            val m = Regex("(scp-\\d+[a-z0-9-]*)", RegexOption.IGNORE_CASE).find(href) ?: continue
+            val hostAndPath = href.substringAfter("://").substringBefore('?').substringBefore('#')
+            val m = pageLinkRegex.find(hostAndPath) ?: continue
             val slug = m.groupValues[1].lowercase()
             if (slug == selfSlug || crosslinks.containsKey(slug)) continue
             val text = a.text().trim()
