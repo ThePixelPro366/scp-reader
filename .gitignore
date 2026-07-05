@@ -18,6 +18,6 @@ build/
 *.jks
 keystore.properties
 
-# Local tooling and the original mockup (not part of the app)
+# Local tooling and original mookup
 .kotlin/
 scp-offline-app-mockup/
