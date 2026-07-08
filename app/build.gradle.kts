@@ -43,6 +43,9 @@ android {
         targetSdk = 34
         versionCode = injectedVersionCode ?: 1
         versionName = injectedVersionName ?: "0.0.0-dev"
+        // Launcher label, referenced by the manifest as @string/app_name. The debug buildType
+        // overrides this so the side-by-side debug app is distinguishable on the launcher.
+        resValue("string", "app_name", "SCP Reader")
     }
 
     signingConfigs {
@@ -65,8 +68,14 @@ android {
             signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
         debug {
+            // Ship debug as a SEPARATE app (com.foundation.scpreader.debug) so it installs
+            // side-by-side with a release install — no downgrade or signature conflicts, and you
+            // can run both at once. The distinct label makes them tell-apart-able on the launcher.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            resValue("string", "app_name", "SCP Reader Debug")
             // Same key as release when available, so a sideloaded debug build can be overwritten by
-            // (or overwrite) a release build without an "signatures don't match" reinstall error.
+            // (or overwrite) a prior debug build without an "signatures don't match" reinstall error.
             // Falls back to AGP's default auto-generated debug keystore when no keystore is set up,
             // so contributors/CI without the keystore still get a normal, installable debug build.
             if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
