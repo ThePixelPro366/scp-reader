@@ -93,6 +93,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleDeepLink(intent)
+        handleOpenPlayer(intent)
         // Android 13+ hides the narration player's notification unless this is granted.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -122,11 +123,21 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleDeepLink(intent)
+        handleOpenPlayer(intent)
     }
 
     private fun handleDeepLink(intent: Intent?) {
         if (intent?.action != Intent.ACTION_VIEW) return
         intent.data?.toString()?.let { app.openFromWikiUrl(it) }
+    }
+
+    // Notification / now-playing-island tap: surface the full-screen player (no-op if nothing is loaded).
+    private fun handleOpenPlayer(intent: Intent?) {
+        if (intent?.action == ACTION_OPEN_PLAYER) app.openPlayer()
+    }
+
+    companion object {
+        const val ACTION_OPEN_PLAYER = "com.foundation.scpreader.OPEN_PLAYER"
     }
 }
 
