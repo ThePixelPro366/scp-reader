@@ -1,13 +1,17 @@
 package com.foundation.scpreader
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -81,12 +85,19 @@ import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     private val app: AppState by viewModels { AppState.factory((application as ScpApp).container) }
+    private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleDeepLink(intent)
+        // Android 13+ hides the narration player's notification unless this is granted.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         setContent {
             val systemDark = isSystemInDarkTheme()
             LaunchedEffect(systemDark) { app.systemDark = systemDark }

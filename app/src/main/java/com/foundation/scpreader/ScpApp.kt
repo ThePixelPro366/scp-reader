@@ -95,6 +95,14 @@ class AppContainer(context: Context) {
         pc.onPositionPersist = { mediaId, positionMs, durationMs ->
             repository.savePlaybackPosition(mediaId, positionMs, durationMs)
         }
+        // Start (or re-signal) the MediaSession service so the notification/media-button/
+        // lock-screen integration is live whenever something is actually playing.
+        pc.onPlaybackStarting = {
+            androidx.core.content.ContextCompat.startForegroundService(
+                appContext,
+                android.content.Intent(appContext, com.foundation.scpreader.playback.PlaybackService::class.java),
+            )
+        }
     }
 }
 

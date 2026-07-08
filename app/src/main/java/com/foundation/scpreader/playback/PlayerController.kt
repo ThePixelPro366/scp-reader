@@ -1,7 +1,11 @@
 package com.foundation.scpreader.playback
 
 import android.content.Context
+import android.net.Uri
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -13,6 +17,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+/** Seek increment for hardware/notification seek-forward/back controls, matching the in-app
+ *  ±15s skip buttons (see PlayerScreen's SKIP_MS). */
+private const val SEEK_INCREMENT_MS = 15_000L
 
 /** UI-facing playback state for the mini-player. */
 data class PlaybackState(
@@ -37,10 +45,24 @@ class PlayerController(context: Context, scope: CoroutineScope) {
     private val appContext = context.applicationContext
     // ExoPlayer is single-threaded and must be touched only from the main thread.
     private val mainScope = CoroutineScope(Dispatchers.Main)
-    private val player: ExoPlayer = ExoPlayer.Builder(appContext).build().apply {
+    private val player: ExoPlayer = ExoPlayer.Builder(appContext)
+        // handleAudioFocus=true makes ExoPlayer request focus on play and react to the system's
+        // standard focus callbacks on its own: pause on permanent/transient loss (e.g. a call or
+        // another app's playback), duck volume on transient-can-duck loss, resume on regain.
+        .setAudioAttributes(
+            AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_SPEECH).build(),
+            /* handleAudioFocus = */ true,
+        )
+        // Pause automatically when headphones/Bluetooth disconnect (ACTION_AUDIO_BECOMING_NOISY).
+        .setHandleAudioBecomingNoisy(true)
+        // Matches the in-app ±15s skip buttons, so hardware/notification seek buttons agree.
+        .setSeekForwardIncrementMs(SEEK_INCREMENT_MS)
+        .setSeekBackIncrementMs(SEEK_INCREMENT_MS)
+        .build().apply {
         addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 push()
+                if (isPlaying) onPlaybackStarting?.invoke()
                 // Persist on pause so a position is captured the moment playback halts.
                 if (!isPlaying) persistNow()
             }
@@ -56,6 +78,10 @@ class PlayerController(context: Context, scope: CoroutineScope) {
         })
     }
 
+    /** The live player, for [com.foundation.scpreader.playback.PlaybackService] to wrap in a
+     *  MediaSession — same process, so the session reflects this instance directly. */
+    val exoPlayer: ExoPlayer get() = player
+
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
@@ -67,6 +93,11 @@ class PlayerController(context: Context, scope: CoroutineScope) {
 
     /** Invoked when a YouTube source errors out (e.g. expired URL); (episode, lastPositionMs). */
     var onSourceError: ((Episode, Long) -> Unit)? = null
+
+    /** Invoked whenever playback starts, so the DI container can ensure the media-notification
+     *  foreground service is running. Safe to invoke repeatedly (starting an already-running
+     *  service is a no-op beyond delivering another onStartCommand). */
+    var onPlaybackStarting: (() -> Unit)? = null
 
     private var currentOrigin: PlaybackOrigin? = null
     private var currentCleaned = false
@@ -134,7 +165,18 @@ class PlayerController(context: Context, scope: CoroutineScope) {
         // New media: clear old segments until the caller supplies this episode's.
         sponsorMediaId = episode.mediaId
         sponsorSegments = emptyList()
-        player.setMediaItem(MediaItem.fromUri(playableUri))
+        val mediaItem = MediaItem.Builder()
+            .setUri(playableUri)
+            .setMediaId(episode.mediaId)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(episode.title)
+                    .setArtist("SCP Archives")
+                    .apply { episode.imageUrl?.let { setArtworkUri(Uri.parse(it)) } }
+                    .build()
+            )
+            .build()
+        player.setMediaItem(mediaItem)
         player.prepare()
         if (startPositionMs > 0) player.seekTo(startPositionMs)
         player.playWhenReady = true

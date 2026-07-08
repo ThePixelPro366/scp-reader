@@ -4,6 +4,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Narration playback notification (media-style, play/pause/skip) while backgrounded. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- See installed browsers so "open original page" can target one (Android 11+ visibility). -->
     <queries>
         <intent>
@@ -46,5 +51,17 @@
                 <data android:scheme="https" android:host="scp-wiki.net" />
             </intent-filter>
         </activity>
+
+        <!-- MediaSession for the narration player: notification, media-button routing, and
+             audio-focus-driven pause/duck are handled by PlayerController's ExoPlayer + this
+             session (see PlaybackService). -->
+        <service
+            android:name=".playback.PlaybackService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>
