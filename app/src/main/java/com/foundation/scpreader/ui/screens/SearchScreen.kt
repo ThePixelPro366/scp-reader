@@ -24,6 +24,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +61,9 @@ fun SearchScreen(app: AppState) {
     val suggestions = app.searchSuggestions
     val results = app.searchResults
     val filtersActive = app.typeFilter != "all" || app.classFilter != "any" || app.activeTags.isNotEmpty() || app.audioOnly
+
+    // Populate the zero-state's top-rated list the first time Search is opened (idempotent).
+    LaunchedEffect(Unit) { app.loadSearchTopRated() }
 
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 108.dp)) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)) {
@@ -122,42 +126,69 @@ fun SearchScreen(app: AppState) {
             }
         }
 
-        Row(
-            Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            val n = results.size
-            Text(
-                if (app.searchQuery.isBlank()) "SEARCH THE ARCHIVE" else "$n RESULT${if (n == 1) "" else "S"}",
-                fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.4.sp, color = c.onSurfaceVariant,
-            )
-            if (app.searchQuery.isNotBlank()) SortSelector(app)
-        }
-
         if (app.searchQuery.isBlank()) {
-            if (app.searchRecentlyViewed.isEmpty()) {
-                Text("Type to search SCPs, tales and GoI documents across the whole wiki.",
-                    fontSize = 14.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
-            } else {
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 4.dp, bottom = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("RECENTLY VIEWED", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.4.sp, color = c.onSurfaceVariant, modifier = Modifier.weight(1f))
-                    Text("Clear", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.primary,
-                        modifier = Modifier.clip(RoundedCornerShape(20.dp)).clickable { app.clearSearchRecents() }.padding(horizontal = 10.dp, vertical = 6.dp))
-                }
-                Column(Modifier.padding(horizontal = 16.dp)) {
-                    app.searchRecentlyViewed.forEach { item -> ResultRow(app, item) }
-                }
-            }
+            SearchZeroState(app)
         } else {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                val n = results.size
+                Text(
+                    "$n RESULT${if (n == 1) "" else "S"}",
+                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.4.sp, color = c.onSurfaceVariant,
+                )
+                SortSelector(app)
+            }
             Column(Modifier.padding(horizontal = 16.dp)) { results.forEach { item -> ResultRow(app, item) } }
         }
     }
 
     if (app.searchFiltersOpen) FilterSheet(app)
+}
+
+/**
+ * Shown before the user types anything: their recently-viewed entries (local, instant) followed by
+ * top-rated SCPs from CROM. Degrades gracefully — while top-rated is loading it shows a spinner,
+ * and on failure it falls back to just recents (or the plain prompt if there are none either).
+ */
+@Composable
+private fun SearchZeroState(app: AppState) {
+    val c = LocalScpScheme.current
+    if (app.searchRecentlyViewed.isNotEmpty()) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("RECENTLY VIEWED", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.4.sp, color = c.onSurfaceVariant, modifier = Modifier.weight(1f))
+            Text("Clear", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.primary,
+                modifier = Modifier.clip(RoundedCornerShape(20.dp)).clickable { app.clearSearchRecents() }.padding(horizontal = 10.dp, vertical = 6.dp))
+        }
+        Column(Modifier.padding(horizontal = 16.dp)) {
+            app.searchRecentlyViewed.forEach { item -> ResultRow(app, item) }
+        }
+    }
+
+    SectionLabel("Top rated")
+    when {
+        app.searchTopRatedLoading && app.searchTopRated.isEmpty() ->
+            Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                com.foundation.scpreader.ui.components.ScpSpinner(size = 48)
+            }
+        app.searchTopRated.isNotEmpty() ->
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                app.searchTopRated.forEach { item -> ResultRow(app, item) }
+            }
+        else -> Text(
+            if (app.searchRecentlyViewed.isEmpty())
+                "Type to search SCPs, tales and GoI documents across the whole wiki."
+            else
+                "Couldn't load top-rated entries right now.",
+            fontSize = 14.sp, color = c.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+        )
+    }
 }
 
 private val searchTypeDefs = listOf("all" to "All", "scp" to "SCP", "tale" to "Tales", "goi" to "GoI")

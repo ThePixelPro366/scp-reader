@@ -118,6 +118,11 @@ class AppState(
     private var searchRaw = listOf<ScpItem>()
     private var searchJob: Job? = null
 
+    // Search zero-state: top-rated SCPs shown before the user types anything.
+    var searchTopRated by mutableStateOf<List<ScpItem>>(emptyList()); private set
+    var searchTopRatedLoading by mutableStateOf(false); private set
+    var searchTopRatedError by mutableStateOf(false); private set
+
     var article by mutableStateOf<Article?>(null); private set
     var articleLoading by mutableStateOf(false); private set
 
@@ -289,6 +294,23 @@ class AppState(
     fun selectSearchSort(m: SortMode) { searchSort = m; applySearchFilters() }
 
     fun clearSearchRecents() { viewModelScope.launch { repo.clearSearchRecents() } }
+
+    /**
+     * Fetch top-rated SCPs for the search zero-state. Idempotent — a no-op once loaded or while a
+     * fetch is in flight — and fails soft (sets [searchTopRatedError]) so an offline open just
+     * falls back to recents / a message rather than crashing.
+     */
+    fun loadSearchTopRated() {
+        if (searchTopRated.isNotEmpty() || searchTopRatedLoading) return
+        searchTopRatedLoading = true
+        searchTopRatedError = false
+        viewModelScope.launch {
+            runCatching { repo.topRated(tag = "scp") }
+                .onSuccess { searchTopRated = it.items.take(12) }
+                .onFailure { searchTopRatedError = true }
+            searchTopRatedLoading = false
+        }
+    }
 
     fun applySearchFilters() {
         val filtered = repo.decorate(searchRaw).filter { item ->
