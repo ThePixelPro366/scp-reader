@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Downloading
 import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Headphones
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.NorthWest
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.SkipNext
@@ -43,10 +45,12 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SignalCellularAlt
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.TextDecrease
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.TextIncrease
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.Wifi
 
 /** Central mapping of the mockup's Material Symbols to Compose ImageVectors. */
@@ -98,4 +102,8 @@ object AppIcons {
     val FastRewind = Icons.Filled.FastRewind
     val SkipNext = Icons.Filled.SkipNext
     val SkipPrevious = Icons.Filled.SkipPrevious
+    val SystemUpdate = Icons.Filled.SystemUpdate
+    val VpnKey = Icons.Filled.VpnKey
+    val ErrorOutline = Icons.Filled.ErrorOutline
+    val Refresh = Icons.Filled.Refresh
 }

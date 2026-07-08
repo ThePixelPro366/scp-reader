@@ -157,6 +157,8 @@ private fun AppRoot(app: AppState) {
         Column(Modifier.fillMaxSize()) {
             // real status-bar inset instead of the mockup's fake status bar
             Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars))
+            val available = app.updateStatus as? com.foundation.scpreader.update.UpdateCheckResult.Available
+            if (available != null && !app.updateBannerDismissed) UpdateBanner(app, available.release.tagName)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 AnimatedContent(
                     targetState = app.screen,
@@ -194,6 +196,26 @@ private fun AppRoot(app: AppState) {
         AnimatedVisibility(visible = showSplash, exit = fadeOut(tween(350))) {
             SplashOverlay()
         }
+    }
+}
+
+/** Dismissible nudge shown app-wide once a newer GitHub release is found; full flow lives in Settings. */
+@Composable
+private fun UpdateBanner(app: AppState, tag: String) {
+    val c = LocalScpScheme.current
+    Row(
+        Modifier.fillMaxWidth().background(c.secondaryContainer).clickable { app.go(Screen.Settings) }
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(AppIcons.SystemUpdate, null, Modifier.size(20.dp), tint = c.onSecondaryContainer)
+        Text("$tag is available — tap to update", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.onSecondaryContainer, modifier = Modifier.weight(1f))
+        Icon(
+            AppIcons.Close, "Dismiss", Modifier.size(18.dp)
+                .clickable { app.updateBannerDismissed = true },
+            tint = c.onSecondaryContainer,
+        )
     }
 }
 

@@ -54,6 +54,10 @@ class AppContainer(context: Context) {
 
     val settingsStore = SettingsStore(appContext)
 
+    /** Encrypted GitHub PAT storage + release-based update checker (see Settings > Updates). */
+    val secureTokenStore = com.foundation.scpreader.data.SecureTokenStore(appContext)
+    val updateManager = com.foundation.scpreader.update.UpdateManager(http)
+
     /** Narration source layer: YouTube (@scparchives) primary, Apple podcast fallback. */
     private val narration = com.foundation.scpreader.data.NarrationRepository(
         youTube = com.foundation.scpreader.network.YouTubeSource("UC4_byDtwX_vNI1TNnj0l59A"),
