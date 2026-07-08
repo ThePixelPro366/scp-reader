@@ -52,6 +52,8 @@ import androidx.compose.material.icons.filled.TextIncrease
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.DownloadForOffline
+import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material.icons.outlined.Downloading
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryBooks
@@ -110,9 +112,13 @@ object AppIcons {
     val VpnKey = Icons.Filled.VpnKey
     val ErrorOutline = Icons.Filled.ErrorOutline
     val Refresh = Icons.Filled.Refresh
-    // Outlined variants for the inactive state of bottom-nav tabs (active uses the filled ones above).
+    // Bottom-nav tab icons. Each tab pairs a filled glyph (active) with an outlined one (inactive).
+    // The Downloads tab uses DownloadForOffline rather than Downloading: unlike Downloading (whose
+    // filled/outlined forms are near-identical), DownloadForOffline has a solid-disc filled variant
+    // that reads clearly as "active" against its outlined ring, matching Home/Library's fill jump.
     val HomeOutlined = Icons.Outlined.Home
     val SearchOutlined = Icons.Outlined.Search
     val LibraryBooksOutlined = Icons.Outlined.LibraryBooks
-    val DownloadingOutlined = Icons.Outlined.Downloading
+    val DownloadForOffline = Icons.Filled.DownloadForOffline
+    val DownloadForOfflineOutlined = Icons.Outlined.DownloadForOffline
 }

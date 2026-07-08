@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -136,7 +137,7 @@ private val navDefs = listOf(
     NavDef(Screen.Home, AppIcons.Home, AppIcons.HomeOutlined, "Home"),
     NavDef(Screen.Search, AppIcons.Search, AppIcons.SearchOutlined, "Search"),
     NavDef(Screen.Library, AppIcons.LibraryBooks, AppIcons.LibraryBooksOutlined, "Library"),
-    NavDef(Screen.Downloads, AppIcons.Downloading, AppIcons.DownloadingOutlined, "Downloads"),
+    NavDef(Screen.Downloads, AppIcons.DownloadForOffline, AppIcons.DownloadForOfflineOutlined, "Downloads"),
 )
 
 @Composable
@@ -243,9 +244,12 @@ private fun BottomNav(app: AppState) {
     val selectedIndex = rawIndex.coerceAtLeast(0)
     Column(Modifier.fillMaxWidth().background(c.surfaceContainer)) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.outlineVariant))
-        BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp)) {
+        // Material 3 NavigationBar dimensions: 80dp container height, a 64×32dp active indicator,
+        // 24dp icons, and each item filling the full bar height so its tappable area clears the
+        // 48×48dp minimum touch target.
+        BoxWithConstraints(Modifier.fillMaxWidth().height(80.dp)) {
             val slotWidth = maxWidth / navDefs.size
-            val pillWidth = 56.dp
+            val pillWidth = 64.dp
             val pillOffset by animateDpAsState(
                 targetValue = slotWidth * selectedIndex + (slotWidth - pillWidth) / 2,
                 animationSpec = tween(320),
@@ -269,6 +273,7 @@ private fun BottomNav(app: AppState) {
                     val labelColor by animateColorAsState(if (active) c.onSurface else c.onSurfaceVariant, label = "label")
                     Column(
                         Modifier.weight(1f)
+                            .fillMaxHeight()
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
@@ -281,7 +286,8 @@ private fun BottomNav(app: AppState) {
                             // Filled icon for the active tab, outlined for the rest.
                             Icon(if (active) def.iconActive else def.iconInactive, null, Modifier.size(24.dp), tint = iconColor)
                         }
-                        Text(def.label, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = labelColor)
+                        // Selected tab's label is bold; the others sit at medium weight.
+                        Text(def.label, fontSize = 12.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium, color = labelColor)
                     }
                 }
             }
