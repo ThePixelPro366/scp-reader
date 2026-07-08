@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,6 +7,22 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
 }
+
+// Release signing credentials, in priority order:
+//  1. keystore.properties at the project root (local dev; gitignored, never committed)
+//  2. KEYSTORE_FILE/KEYSTORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD env vars (CI — see release.yml)
+// Neither present is fine: releaseSigningConfig stays null and the release build type falls back
+// to debug signing below, so the build still succeeds for contributors without the keystore.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val releaseStoreFile = keystoreProperties.getProperty("storeFile") ?: System.getenv("KEYSTORE_FILE")
+val releaseStorePassword = keystoreProperties.getProperty("storePassword") ?: System.getenv("KEYSTORE_PASSWORD")
+val releaseKeyAlias = keystoreProperties.getProperty("keyAlias") ?: System.getenv("KEY_ALIAS")
+val releaseKeyPassword = keystoreProperties.getProperty("keyPassword") ?: System.getenv("KEY_PASSWORD")
+val hasReleaseSigning = !releaseStoreFile.isNullOrBlank() && !releaseStorePassword.isNullOrBlank() &&
+    !releaseKeyAlias.isNullOrBlank() && !releaseKeyPassword.isNullOrBlank()
 
 android {
     namespace = "com.foundation.scpreader"
@@ -18,10 +36,31 @@ android {
         versionName = "0.1"
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Real signing when credentials are available; otherwise debug-signed so `assembleRelease`
+            // still works for contributors/CI runs without the keystore (see SIGNING.md).
+            signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+        }
+        debug {
+            // Same key as release when available, so a sideloaded debug build can be overwritten by
+            // (or overwrite) a release build without an "signatures don't match" reinstall error.
+            // Falls back to AGP's default auto-generated debug keystore when no keystore is set up,
+            // so contributors/CI without the keystore still get a normal, installable debug build.
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
