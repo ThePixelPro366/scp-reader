@@ -43,7 +43,17 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew assembleRelease --no-daemon
+        # Stamp the APK's versionName with the release tag (leading "v" stripped) so the installed
+        # build self-reports the exact tag it was published under; versionCode uses the run number
+        # so each build is monotonically higher. The in-app update check then reads an installed
+        # build as up-to-date instead of always seeing a "newer" release.
+        run: |
+          VERSION_NAME="${{ github.event.inputs.version }}"
+          VERSION_NAME="${VERSION_NAME#v}"
+          VERSION_NAME="${VERSION_NAME#V}"
+          ./gradlew assembleRelease --no-daemon \
+            -PappVersionName="$VERSION_NAME" \
+            -PappVersionCode="${{ github.run_number }}"
 
       # $RUNNER_TEMP is outside the workspace/checkout so upload-artifact can never pick it up
       # regardless of path patterns; this removes it from the runner's disk immediately anyway.

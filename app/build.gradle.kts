@@ -24,6 +24,15 @@ val releaseKeyPassword = keystoreProperties.getProperty("keyPassword") ?: System
 val hasReleaseSigning = !releaseStoreFile.isNullOrBlank() && !releaseStorePassword.isNullOrBlank() &&
     !releaseKeyAlias.isNullOrBlank() && !releaseKeyPassword.isNullOrBlank()
 
+// Version stamp. CI injects the release tag (leading "v" already stripped) via -PappVersionName
+// and the run number via -PappVersionCode (see release.yml), so a released APK self-reports the
+// exact tag it was published under and the in-app update check reads tag == installed as
+// up-to-date. Local/dev builds get a sentinel that never matches a real release.
+val injectedVersionName = (project.findProperty("appVersionName") as String?)?.takeIf { it.isNotBlank() }
+    ?: System.getenv("APP_VERSION_NAME")?.takeIf { it.isNotBlank() }
+val injectedVersionCode = (project.findProperty("appVersionCode") as String?)?.toIntOrNull()
+    ?: System.getenv("APP_VERSION_CODE")?.toIntOrNull()
+
 android {
     namespace = "com.foundation.scpreader"
     compileSdk = 34
@@ -32,8 +41,8 @@ android {
         applicationId = "com.foundation.scpreader"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = injectedVersionCode ?: 1
+        versionName = injectedVersionName ?: "0.0.0-dev"
     }
 
     signingConfigs {
