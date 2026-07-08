@@ -52,6 +52,10 @@ import androidx.compose.material.icons.filled.TextIncrease
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.outlined.Downloading
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.LibraryBooks
+import androidx.compose.material.icons.outlined.Search
 
 /** Central mapping of the mockup's Material Symbols to Compose ImageVectors. */
 object AppIcons {
@@ -106,4 +110,9 @@ object AppIcons {
     val VpnKey = Icons.Filled.VpnKey
     val ErrorOutline = Icons.Filled.ErrorOutline
     val Refresh = Icons.Filled.Refresh
+    // Outlined variants for the inactive state of bottom-nav tabs (active uses the filled ones above).
+    val HomeOutlined = Icons.Outlined.Home
+    val SearchOutlined = Icons.Outlined.Search
+    val LibraryBooksOutlined = Icons.Outlined.LibraryBooks
+    val DownloadingOutlined = Icons.Outlined.Downloading
 }

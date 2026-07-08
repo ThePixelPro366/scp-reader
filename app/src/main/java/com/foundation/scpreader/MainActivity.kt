@@ -129,14 +129,14 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private data class NavDef(val screen: Screen, val icon: ImageVector, val label: String)
+private data class NavDef(val screen: Screen, val iconActive: ImageVector, val iconInactive: ImageVector, val label: String)
 
+// Settings is intentionally absent — it lives as an action in the Home top bar, not the bottom nav.
 private val navDefs = listOf(
-    NavDef(Screen.Home, AppIcons.Home, "Home"),
-    NavDef(Screen.Search, AppIcons.Search, "Search"),
-    NavDef(Screen.Library, AppIcons.LibraryBooks, "Library"),
-    NavDef(Screen.Downloads, AppIcons.Downloading, "Downloads"),
-    NavDef(Screen.Settings, AppIcons.Settings, "Settings"),
+    NavDef(Screen.Home, AppIcons.Home, AppIcons.HomeOutlined, "Home"),
+    NavDef(Screen.Search, AppIcons.Search, AppIcons.SearchOutlined, "Search"),
+    NavDef(Screen.Library, AppIcons.LibraryBooks, AppIcons.LibraryBooksOutlined, "Library"),
+    NavDef(Screen.Downloads, AppIcons.Downloading, AppIcons.DownloadingOutlined, "Downloads"),
 )
 
 @Composable
@@ -237,7 +237,10 @@ private fun SplashOverlay() {
 @Composable
 private fun BottomNav(app: AppState) {
     val c = LocalScpScheme.current
-    val selectedIndex = navDefs.indexOfFirst { it.screen == app.screen }.coerceAtLeast(0)
+    // -1 when the current screen isn't a bottom-nav destination (e.g. Settings) → no tab highlighted.
+    val rawIndex = navDefs.indexOfFirst { it.screen == app.screen }
+    val pillVisible = rawIndex >= 0
+    val selectedIndex = rawIndex.coerceAtLeast(0)
     Column(Modifier.fillMaxWidth().background(c.surfaceContainer)) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.outlineVariant))
         BoxWithConstraints(Modifier.fillMaxWidth().height(72.dp)) {
@@ -248,18 +251,20 @@ private fun BottomNav(app: AppState) {
                 animationSpec = tween(320),
                 label = "pill",
             )
-            // sliding pill highlight
-            Box(
-                Modifier
-                    .padding(top = 12.dp)
-                    .offset(x = pillOffset)
-                    .size(width = pillWidth, height = 32.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(c.secondaryContainer),
-            )
+            // Sliding pill highlight behind the active tab; hidden when no nav tab is selected.
+            if (pillVisible) {
+                Box(
+                    Modifier
+                        .padding(top = 12.dp)
+                        .offset(x = pillOffset)
+                        .size(width = pillWidth, height = 32.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(c.secondaryContainer),
+                )
+            }
             Row(Modifier.fillMaxWidth()) {
                 navDefs.forEachIndexed { i, def ->
-                    val active = i == selectedIndex
+                    val active = pillVisible && i == selectedIndex
                     val iconColor by animateColorAsState(if (active) c.onSecondaryContainer else c.onSurfaceVariant, label = "icon")
                     val labelColor by animateColorAsState(if (active) c.onSurface else c.onSurfaceVariant, label = "label")
                     Column(
@@ -273,7 +278,8 @@ private fun BottomNav(app: AppState) {
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Box(Modifier.height(32.dp), contentAlignment = Alignment.Center) {
-                            Icon(def.icon, null, Modifier.size(24.dp), tint = iconColor)
+                            // Filled icon for the active tab, outlined for the rest.
+                            Icon(if (active) def.iconActive else def.iconInactive, null, Modifier.size(24.dp), tint = iconColor)
                         }
                         Text(def.label, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = labelColor)
                     }

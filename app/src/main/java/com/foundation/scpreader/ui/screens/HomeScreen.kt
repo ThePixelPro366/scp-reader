@@ -99,9 +99,21 @@ fun HomeScreen(app: AppState) {
         },
     ) {
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 108.dp)) {
-        Column(Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 12.dp, bottom = 8.dp)) {
-            Text("FOUNDATION ARCHIVE", fontSize = 13.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.4.sp, color = c.primary)
-            Text("Secure. Contain. Protect.", fontSize = 27.sp, color = c.onSurface, lineHeight = 30.sp)
+        Row(
+            Modifier.fillMaxWidth().padding(start = 22.dp, end = 10.dp, top = 12.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("FOUNDATION ARCHIVE", fontSize = 13.sp, fontWeight = FontWeight.Medium, letterSpacing = 1.4.sp, color = c.primary)
+                Text("Secure. Contain. Protect.", fontSize = 27.sp, color = c.onSurface, lineHeight = 30.sp)
+            }
+            // Settings lives here (top-right action), not in the bottom navigation bar.
+            Box(
+                Modifier.clip(CircleShape).clickable { app.go(com.foundation.scpreader.Screen.Settings) }.padding(8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(AppIcons.Settings, "Settings", Modifier.size(26.dp), tint = c.onSurfaceVariant)
+            }
         }
 
         // search entry
