@@ -4,9 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release tag/name"
-        required: true
-        default: "v0.1.0"
+        # GitHub can't pre-fill this field with the latest release (workflow_dispatch defaults are
+        # static YAML), so leaving it blank auto-increments the patch instead — see "Resolve version".
+        description: "Release version — blank = auto-bump patch from the latest release (0.2.0 -> 0.2.1). Type an explicit version to override, e.g. 0.3.0."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -17,6 +19,35 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Resolve the release version once, up front, and reuse it for the APK stamp, tag and name.
+      #   - non-empty input  -> use it verbatim (leading "v" stripped)
+      #   - empty input      -> take the latest published release tag and bump its patch number
+      #   - no releases yet   -> start at 0.1.0
+      - name: Resolve version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+          provided="${INPUT_VERSION#[vV]}"
+          if [ -n "$provided" ]; then
+            resolved="$provided"
+          else
+            latest="$(gh release view --json tagName -q .tagName 2>/dev/null || true)"
+            latest="${latest#[vV]}"
+            if [ -z "$latest" ]; then
+              resolved="0.1.0"
+            else
+              IFS='.' read -r major minor patch <<< "$latest"
+              major="${major:-0}"; minor="${minor:-0}"; patch="${patch:-0}"
+              patch="${patch%%[!0-9]*}"; patch="${patch:-0}"
+              resolved="${major}.${minor}.$((patch + 1))"
+            fi
+          fi
+          echo "version=$resolved" >> "$GITHUB_OUTPUT"
+          echo "Resolved release version: $resolved (tag v$resolved)"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -43,16 +74,13 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        # Stamp the APK's versionName with the release tag (leading "v" stripped) so the installed
-        # build self-reports the exact tag it was published under; versionCode uses the run number
-        # so each build is monotonically higher. The in-app update check then reads an installed
-        # build as up-to-date instead of always seeing a "newer" release.
+        # Stamp the APK's versionName with the resolved version so the installed build self-reports
+        # the exact tag it was published under; versionCode uses the run number so each build is
+        # monotonically higher. The in-app update check then reads an installed build as up-to-date
+        # instead of always seeing a "newer" release.
         run: |
-          VERSION_NAME="${{ github.event.inputs.version }}"
-          VERSION_NAME="${VERSION_NAME#v}"
-          VERSION_NAME="${VERSION_NAME#V}"
           ./gradlew assembleRelease --no-daemon \
-            -PappVersionName="$VERSION_NAME" \
+            -PappVersionName="${{ steps.version.outputs.version }}" \
             -PappVersionCode="${{ github.run_number }}"
 
       # $RUNNER_TEMP is outside the workspace/checkout so upload-artifact can never pick it up
@@ -74,7 +102,7 @@ jobs:
       - name: Create draft release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.version }}
-          name: ${{ github.event.inputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
           draft: true
           files: ${{ steps.apk.outputs.path }}
