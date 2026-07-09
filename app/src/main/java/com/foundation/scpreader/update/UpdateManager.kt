@@ -17,7 +17,7 @@ private const val API_VERSION = "2022-11-28"
 data class GithubAsset(
     val id: Long,
     val name: String,
-    val url: String, // API asset URL — required (not browser_download_url) to fetch a private repo's binary
+    val url: String, // API asset URL — used with an unauthenticated request; works on a public repo
 )
 
 @Serializable
@@ -33,8 +33,6 @@ sealed interface UpdateCheckResult {
     data object Idle : UpdateCheckResult
     data object Checking : UpdateCheckResult
     data object UpToDate : UpdateCheckResult
-    data object NoToken : UpdateCheckResult
-    data object InvalidToken : UpdateCheckResult
     data object NoReleases : UpdateCheckResult
     data class Available(val release: GithubRelease, val asset: GithubAsset) : UpdateCheckResult
     data class Error(val message: String) : UpdateCheckResult
@@ -49,27 +47,24 @@ sealed interface UpdateDownloadState {
 
 /**
  * Checks ThePixelPro366/scp-reader's GitHub Releases for a newer version and downloads the release
- * APK asset. The repo is private, so every call needs the user-supplied PAT — see
- * [com.foundation.scpreader.data.SecureTokenStore]. The token is passed only as a header value and
- * is never logged.
+ * APK asset. The repo is public, so every call is unauthenticated — no credentials are stored or
+ * sent anywhere.
  */
 class UpdateManager(private val client: OkHttpClient) {
 
     private val json = Json { ignoreUnknownKeys = true }
 
     /** Fetches the latest release and compares its tag against [currentVersion]. */
-    suspend fun checkForUpdate(token: String, currentVersion: String): UpdateCheckResult = withContext(Dispatchers.IO) {
-        if (token.isBlank()) return@withContext UpdateCheckResult.NoToken
+    suspend fun checkForUpdate(currentVersion: String): UpdateCheckResult = withContext(Dispatchers.IO) {
         runCatching {
             val req = Request.Builder()
                 .url("https://api.github.com/repos/$REPO/releases/latest")
-                .header("Authorization", "Bearer $token")
                 .header("Accept", "application/vnd.github+json")
                 .header("X-GitHub-Api-Version", API_VERSION)
                 .build()
             client.newCall(req).execute().use { resp ->
                 when {
-                    resp.code == 401 || resp.code == 403 -> UpdateCheckResult.InvalidToken
+                    resp.code == 403 -> UpdateCheckResult.Error("GitHub rate-limited this check — try again later")
                     resp.code == 404 -> UpdateCheckResult.NoReleases
                     !resp.isSuccessful -> UpdateCheckResult.Error("GitHub returned HTTP ${resp.code}")
                     else -> {
@@ -87,15 +82,14 @@ class UpdateManager(private val client: OkHttpClient) {
     }
 
     /**
-     * Downloads [asset]'s binary to [dest]. Private-repo assets must be fetched from the asset's
-     * API `url` (not `browser_download_url`) with an `application/octet-stream` Accept header;
-     * GitHub 302s to a pre-signed, unauthenticated blob URL that OkHttp follows automatically.
+     * Downloads [asset]'s binary to [dest] from its API `url` (not `browser_download_url`), with an
+     * `application/octet-stream` Accept header; GitHub 302s to a pre-signed, unauthenticated blob URL
+     * that OkHttp follows automatically.
      */
-    suspend fun downloadAsset(token: String, asset: GithubAsset, dest: File, onProgress: (Int) -> Unit): Boolean =
+    suspend fun downloadAsset(asset: GithubAsset, dest: File, onProgress: (Int) -> Unit): Boolean =
         withContext(Dispatchers.IO) {
             val req = Request.Builder()
                 .url(asset.url)
-                .header("Authorization", "Bearer $token")
                 .header("Accept", "application/octet-stream")
                 .header("X-GitHub-Api-Version", API_VERSION)
                 .build()

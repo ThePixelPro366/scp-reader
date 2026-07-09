@@ -11,7 +11,6 @@ import com.foundation.scpreader.data.Article
 import com.foundation.scpreader.data.Episode
 import com.foundation.scpreader.data.ScpItem
 import com.foundation.scpreader.data.ScpRepository
-import com.foundation.scpreader.data.SecureTokenStore
 import com.foundation.scpreader.data.Settings
 import com.foundation.scpreader.data.SettingsStore
 import com.foundation.scpreader.update.UpdateCheckResult
@@ -44,7 +43,6 @@ class AppState(
     val repo: ScpRepository,
     val player: PlayerController,
     private val settingsStore: SettingsStore,
-    private val secureTokenStore: SecureTokenStore,
     private val updateManager: UpdateManager,
     private val isOnline: () -> Boolean = { true },
 ) : ViewModel() {
@@ -68,8 +66,7 @@ class AppState(
     var autoDownloadBookmarks by mutableStateOf(false)
     var sponsorCategories by mutableStateOf(com.foundation.scpreader.playback.SponsorCategory.DEFAULT_ENABLED)
 
-    // ---- in-app updates (GitHub Releases on the private repo) ----
-    var hasGithubToken by mutableStateOf(false); private set
+    // ---- in-app updates (GitHub Releases, public repo — no auth needed) ----
     var updateStatus by mutableStateOf<UpdateCheckResult>(UpdateCheckResult.Idle); private set
     var updateDownload by mutableStateOf<UpdateDownloadState>(UpdateDownloadState.Idle); private set
     var updateBannerDismissed by mutableStateOf(false)
@@ -172,9 +169,8 @@ class AppState(
         // Surface background audio-download stage failures as a transient notice.
         repo.onDownloadNotice = { message -> notice(message) }
         // Silent check on cold start so a returning user sees the banner without tapping anything;
-        // skipped entirely (no state change, no network call) if no token has been set yet.
-        hasGithubToken = secureTokenStore.githubToken != null
-        if (hasGithubToken) checkForUpdates()
+        // the repo is public, so this needs no credentials at all.
+        checkForUpdates()
         viewModelScope.launch { repo.downloads.collect { downloads = it; redecorate() } }
         viewModelScope.launch { repo.bookmarks.collect { bookmarks = it; bookmarkedUrls = it.map { b -> b.url }.toSet() } }
         viewModelScope.launch { repo.recents.collect { recentlyViewed = repo.decorate(it) } }
@@ -540,43 +536,23 @@ class AppState(
     }
 
     // ---- in-app updates ----
-    /** Saves a new GitHub PAT (encrypted; see [SecureTokenStore]) and re-checks for updates. */
-    fun saveGithubToken(token: String) {
-        val trimmed = token.trim()
-        if (trimmed.isEmpty()) return
-        secureTokenStore.githubToken = trimmed
-        hasGithubToken = true
-        updateDownload = UpdateDownloadState.Idle
-        checkForUpdates()
-    }
-
-    fun clearGithubToken() {
-        secureTokenStore.githubToken = null
-        hasGithubToken = false
-        updateStatus = UpdateCheckResult.Idle
-        updateDownload = UpdateDownloadState.Idle
-    }
-
-    /** Manual "Check for updates" entry point, also run silently once on app start. */
+    /** Manual "Check for updates" entry point, also run silently once on app start. No credentials needed. */
     fun checkForUpdates() {
-        val token = secureTokenStore.githubToken
-        if (token == null) { updateStatus = UpdateCheckResult.NoToken; return }
         updateStatus = UpdateCheckResult.Checking
         updateBannerDismissed = false
         viewModelScope.launch {
-            updateStatus = updateManager.checkForUpdate(token, BuildConfig.VERSION_NAME)
+            updateStatus = updateManager.checkForUpdate(BuildConfig.VERSION_NAME)
         }
     }
 
-    /** Downloads the release APK found by [checkForUpdates] into the cache dir. */
+    /** Downloads the release APK found by [checkForUpdates] into the cache dir. No credentials needed. */
     fun downloadUpdate(context: android.content.Context) {
-        val token = secureTokenStore.githubToken ?: return
         val available = updateStatus as? UpdateCheckResult.Available ?: return
         updateDownload = UpdateDownloadState.Downloading(0)
         viewModelScope.launch {
             val dest = java.io.File(java.io.File(context.cacheDir, "updates"), "scp-reader-update.apk")
             updateDownload = runCatching {
-                updateManager.downloadAsset(token, available.asset, dest) { pct ->
+                updateManager.downloadAsset(available.asset, dest) { pct ->
                     updateDownload = UpdateDownloadState.Downloading(pct)
                 }
             }.fold(
@@ -663,7 +639,7 @@ class AppState(
         fun factory(container: AppContainer): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T =
-                AppState(container.repository, container.player, container.settingsStore, container.secureTokenStore, container.updateManager, container::isOnline) as T
+                AppState(container.repository, container.player, container.settingsStore, container.updateManager, container::isOnline) as T
         }
     }
 }

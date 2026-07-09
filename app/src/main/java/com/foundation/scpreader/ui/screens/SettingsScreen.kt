@@ -15,28 +15,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -356,52 +346,15 @@ private fun ToggleRow(icon: ImageVector, title: String, subtitle: String?, on: B
 }
 
 /**
- * GitHub PAT entry (encrypted storage; the field never shows a previously-saved token back) plus
- * update-check/download/install controls for ThePixelPro366/scp-reader's private-repo releases.
+ * Update-check/download/install controls for ThePixelPro366/scp-reader's public-repo releases.
+ * No credentials of any kind are needed — the GitHub Releases API and asset download both work
+ * unauthenticated on a public repo.
  */
 @Composable
 private fun UpdatesSection(app: AppState) {
     val c = LocalScpScheme.current
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val errorColor = Color(0xFFB3261E)
-    var draftToken by remember { mutableStateOf("") }
-
-    Text("GitHub access token", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 4.dp))
-    Text(
-        "Needed to check the private ThePixelPro366/scp-reader repo for new releases. Stored encrypted on-device.",
-        fontSize = 13.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 10.dp),
-    )
-    Row(
-        Modifier.padding(horizontal = 18.dp).fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp))
-            .background(c.surfaceCHigh).padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(AppIcons.VpnKey, null, Modifier.size(18.dp), tint = c.onSurfaceVariant)
-        Box(Modifier.weight(1f).padding(start = 12.dp)) {
-            if (draftToken.isEmpty()) {
-                Text(if (app.hasGithubToken) "Token saved — paste a new one to replace it" else "Paste your token", fontSize = 14.sp, color = c.onSurfaceVariant)
-            }
-            BasicTextField(
-                value = draftToken,
-                onValueChange = { draftToken = it },
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                textStyle = TextStyle(fontSize = 14.sp, color = c.onSurface),
-                cursorBrush = SolidColor(c.primary),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-    Row(Modifier.padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        ActionButton("Save", filled = true, enabled = draftToken.isNotBlank()) {
-            app.saveGithubToken(draftToken)
-            draftToken = ""
-        }
-        if (app.hasGithubToken) ActionButton("Clear", filled = false) { app.clearGithubToken(); draftToken = "" }
-    }
-
-    Divider1()
 
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
@@ -425,8 +378,6 @@ private fun UpdatesSection(app: AppState) {
     Column(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 16.dp)) {
         when (val status = app.updateStatus) {
             UpdateCheckResult.Idle, UpdateCheckResult.Checking -> {}
-            UpdateCheckResult.NoToken -> Text("Add a token above, then check for updates", fontSize = 13.sp, color = c.onSurfaceVariant)
-            UpdateCheckResult.InvalidToken -> StatusLine(AppIcons.ErrorOutline, "Token invalid or expired — update it above", errorColor)
             UpdateCheckResult.NoReleases -> Text("No releases published yet", fontSize = 13.sp, color = c.onSurfaceVariant)
             UpdateCheckResult.UpToDate -> StatusLine(AppIcons.Check, "You're up to date", c.onSurfaceVariant)
             is UpdateCheckResult.Error -> StatusLine(AppIcons.ErrorOutline, "Couldn't check for updates: ${status.message}", errorColor)

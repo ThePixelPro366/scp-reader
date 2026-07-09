@@ -122,9 +122,6 @@ dependencies {
     // Preferences DataStore (persisted settings)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
-    // Encrypted on-device storage for the GitHub PAT (update checker), not plain DataStore.
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-
     // Room (offline-first source of truth)
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
