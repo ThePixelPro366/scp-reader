@@ -49,3 +49,10 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
         )
     }
 }
+
+/** v6 -> v7: add the reading-progress fraction to recents (backs the Continue-reading bar). */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `recents` ADD COLUMN `progress` REAL NOT NULL DEFAULT 0")
+    }
+}

@@ -55,8 +55,9 @@ import com.foundation.scpreader.ui.components.ScpPullSpinner
 import com.foundation.scpreader.ui.components.ScpSpinner
 import com.foundation.scpreader.ui.components.chipStyle
 import com.foundation.scpreader.ui.theme.LocalScpScheme
+import kotlin.math.roundToInt
 
-private val typeDefs = listOf("all" to "All", "scp" to "SCP", "tale" to "Tales", "goi" to "GoI")
+private val typeDefs = listOf("all" to "All", "scp" to "SCP", "tale" to "Tales", "goi" to "GoI", "series" to "Series")
 
 @Composable
 fun TypeChipRow(app: AppState, padding: Modifier) {
@@ -227,7 +228,16 @@ private fun HeroSlot(app: AppState) {
             ) {
                 Text(item.number, fontFamily = Mono, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.onPrimaryContainer)
                 Text(item.title, fontSize = 22.sp, fontWeight = FontWeight.Medium, color = c.onPrimaryContainer, lineHeight = 25.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text("★ ${item.rating} · ${item.objectClass}", fontSize = 12.sp, color = c.onPrimaryContainer.copy(alpha = 0.85f), modifier = Modifier.padding(top = 10.dp))
+                val frac = if (app.heroMode == HeroMode.ContinueReading) (app.recentProgress[item.url] ?: 0f) else 0f
+                if (frac > 0.01f) {
+                    // Reading-progress bar (persisted scroll fraction) — resumes where you left off.
+                    Box(Modifier.padding(top = 14.dp).fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(c.onPrimaryContainer.copy(alpha = 0.18f))) {
+                        Box(Modifier.fillMaxWidth(frac).height(5.dp).clip(RoundedCornerShape(3.dp)).background(c.primary))
+                    }
+                    Text("${(frac * 100).roundToInt()}% read", fontSize = 12.sp, color = c.onPrimaryContainer.copy(alpha = 0.85f), modifier = Modifier.padding(top = 7.dp))
+                } else {
+                    Text("★ ${item.rating} · ${item.objectClass}", fontSize = 12.sp, color = c.onPrimaryContainer.copy(alpha = 0.85f), modifier = Modifier.padding(top = 10.dp))
+                }
             }
         }
     }

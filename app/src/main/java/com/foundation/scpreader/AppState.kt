@@ -136,6 +136,8 @@ class AppState(
     var recentlyViewed by mutableStateOf<List<ScpItem>>(emptyList()); private set
     var searchRecentlyViewed by mutableStateOf<List<ScpItem>>(emptyList()); private set
     val continueItem: ScpItem? get() = recentlyViewed.firstOrNull()
+    /** Reading-progress fraction (0f‥1f) per article url, for the Continue-reading hero bar. */
+    var recentProgress by mutableStateOf<Map<String, Float>>(emptyMap()); private set
     // Reader scroll restore: offset to jump to when the current article's content is laid out.
     var readerScrollRestore by mutableStateOf(0); private set
     var readerScrollConsumed by mutableStateOf(false)
@@ -163,6 +165,7 @@ class AppState(
         viewModelScope.launch { repo.downloads.collect { downloads = it; redecorate() } }
         viewModelScope.launch { repo.bookmarks.collect { bookmarks = it; bookmarkedUrls = it.map { b -> b.url }.toSet() } }
         viewModelScope.launch { repo.recents.collect { recentlyViewed = repo.decorate(it) } }
+        viewModelScope.launch { repo.recentRows.collect { rows -> recentProgress = rows.associate { it.url to it.progress } } }
         viewModelScope.launch { repo.searchRecents.collect { searchRecentlyViewed = repo.decorate(it) } }
         viewModelScope.launch { repo.tagVocab.collect { tagVocab = it } }
         // Redecorate feed/search whenever narration availability changes (e.g. after YouTube sync).
@@ -356,8 +359,8 @@ class AppState(
      * Persist the reader's scroll offset for [url]. Takes the url explicitly because saving
      * happens as the reader closes, by which point [readerItem] has already been cleared.
      */
-    fun saveReaderScroll(url: String, offset: Int) {
-        viewModelScope.launch { repo.saveRecentScroll(url, offset) }
+    fun saveReaderScroll(url: String, offset: Int, progress: Float) {
+        viewModelScope.launch { repo.saveRecentScroll(url, offset, progress) }
     }
 
     /** Open a tapped in-article link: SCP pages route to the in-app reader, else to the browser. */

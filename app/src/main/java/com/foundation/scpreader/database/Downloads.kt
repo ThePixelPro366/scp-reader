@@ -72,7 +72,7 @@ interface DownloadDao {
         DownloadEntity::class, BookmarkEntity::class, RecentEntity::class, SearchRecentEntity::class,
         PlaybackPositionEntity::class, SponsorSegmentEntity::class, NarrationIndexEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

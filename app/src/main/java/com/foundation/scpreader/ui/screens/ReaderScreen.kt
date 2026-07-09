@@ -113,13 +113,14 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
     // Guarded by readerScrollConsumed so a quick open/close can't clobber a saved position with 0.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, item.url) {
+        fun progressFrac() = if (scrollState.maxValue > 0) (scrollState.value.toFloat() / scrollState.maxValue).coerceIn(0f, 1f) else 0f
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP && app.readerScrollConsumed) app.saveReaderScroll(item.url, scrollState.value)
+            if (event == Lifecycle.Event.ON_STOP && app.readerScrollConsumed) app.saveReaderScroll(item.url, scrollState.value, progressFrac())
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            if (app.readerScrollConsumed) app.saveReaderScroll(item.url, scrollState.value)
+            if (app.readerScrollConsumed) app.saveReaderScroll(item.url, scrollState.value, progressFrac())
         }
     }
 

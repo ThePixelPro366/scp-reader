@@ -22,7 +22,8 @@ data class RecentEntity(
     val tagsCsv: String,
     val rating: Int,
     val imageUrl: String?,
-    val scroll: Int,        // last vertical scroll offset in px
+    val scroll: Int,        // last vertical scroll offset in px (exact resume position)
+    val progress: Float = 0f, // 0f‥1f reading fraction (scroll / content height), for the Continue-reading bar
     val updatedAt: Long,
 )
 
@@ -37,6 +38,6 @@ interface RecentDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: RecentEntity)
 
-    @Query("UPDATE recents SET scroll = :scroll, updatedAt = :ts WHERE url = :url")
-    suspend fun updateScroll(url: String, scroll: Int, ts: Long)
+    @Query("UPDATE recents SET scroll = :scroll, progress = :progress, updatedAt = :ts WHERE url = :url")
+    suspend fun updateScroll(url: String, scroll: Int, progress: Float, ts: Long)
 }

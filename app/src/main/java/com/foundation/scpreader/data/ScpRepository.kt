@@ -221,20 +221,22 @@ class ScpRepository(
 
     // ---- recently viewed / continue reading ----
     val recents: Flow<List<ScpItem>> = recentDao.observeAll().map { rows -> rows.map { it.toScpItem() } }
+    /** Raw recents rows — exposes the reading-progress fraction the ScpItem projection drops. */
+    val recentRows: Flow<List<RecentEntity>> = recentDao.observeAll()
 
-    /** Record (or bump) an opened article, preserving any saved scroll offset. */
+    /** Record (or bump) an opened article, preserving any saved scroll offset & reading progress. */
     suspend fun recordRecent(item: ScpItem) {
         val prev = recentDao.get(item.url)
         recentDao.upsert(
             RecentEntity(
                 url = item.url, number = item.number, title = item.title, objectClass = item.objectClass,
                 typeLabel = item.typeLabel, tagsCsv = item.tags.joinToString(","), rating = item.rating,
-                imageUrl = item.imageUrl, scroll = prev?.scroll ?: 0, updatedAt = now(),
+                imageUrl = item.imageUrl, scroll = prev?.scroll ?: 0, progress = prev?.progress ?: 0f, updatedAt = now(),
             )
         )
     }
 
-    suspend fun saveRecentScroll(url: String, scroll: Int) = recentDao.updateScroll(url, scroll, now())
+    suspend fun saveRecentScroll(url: String, scroll: Int, progress: Float) = recentDao.updateScroll(url, scroll, progress, now())
     suspend fun recentScroll(url: String): Int = recentDao.get(url)?.scroll ?: 0
 
     // ---- search-screen recents (articles opened from search only) ----
