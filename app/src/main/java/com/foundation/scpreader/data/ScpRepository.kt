@@ -431,7 +431,10 @@ class ScpRepository(
         val blocks = scraped?.blocks?.takeIf { it.isNotEmpty() } ?: failureBlocks()
         val blocksJson = json.encodeToString(blocksSerializer, blocks)
         var size = blocksJson.toByteArray().size.toLong()
-        dao.updateProgress(job.url, DlStatus.ACTIVE, if (job.withAudio) 40 else 90, now())
+        // Text is done at this point. Text-only jumps to 90; an audio download still has the
+        // (much longer) narration phase ahead, so it advances through finer milestones below
+        // instead of parking at a single number while the network work runs.
+        dao.updateProgress(job.url, DlStatus.ACTIVE, if (job.withAudio) 20 else 90, now())
 
         var audioPath: String? = null
         var mediaId: String? = null
@@ -439,22 +442,30 @@ class ScpRepository(
         var videoId: String? = null
         var sponsorRemovedJson: String? = null
         if (job.withAudio) {
-            // Stage 1: pick + resolve a playable source (local/YouTube/Apple).
+            // Stage 1: pick + resolve a playable source (local/YouTube/Apple). Resolving a YouTube
+            // stream URL is a slow network round-trip, so nudge progress before and after it.
             val ep = itemNumber(item)?.let { narration.episodeFor(it) }
+            dao.updateProgress(job.url, DlStatus.ACTIVE, 30, now())
             val playable = ep?.let {
                 runCatching { narration.resolvePlayable(it) }
                     .onFailure { e -> Log.e(DL_TAG, "audio resolve failed for ${item.number}", e) }
                     .getOrNull()
             }
+            if (playable != null) dao.updateProgress(job.url, DlStatus.ACTIVE, 40, now())
             if (ep == null) {
                 Log.w(DL_TAG, "audio: no narration episode for ${item.number}")
                 onDownloadNotice?.invoke("No narration for ${item.number}")
             } else if (playable == null) {
                 onDownloadNotice?.invoke("Audio extraction failed")
             } else {
-                // Stage 2: fetch the audio bytes.
+                // Stage 2: fetch the audio bytes. Map byte progress onto the 40–90 band so the bar
+                // climbs steadily through the (usually largest) part of an audio download.
                 val raw = File(filesDir, "audio/${slug(job.url)}.audio").apply { parentFile?.mkdirs() }
-                val dl = runCatching { downloadFile(playable.uri, raw) }
+                val dl = runCatching {
+                    downloadFile(playable.uri, raw) { frac ->
+                        dao.updateProgress(job.url, DlStatus.ACTIVE, 40 + (frac * 50).toInt(), now())
+                    }
+                }
                 if (dl.getOrDefault(false)) {
                     audioPath = raw.absolutePath
                     // Key the row on the PRIMARY episode (what playback's episodeFor resolves to),
@@ -473,6 +484,7 @@ class ScpRepository(
                         if (segs.isEmpty()) {
                             sponsorRemovedJson = "[]"   // YouTube source, nothing to cut → already clean
                         } else {
+                            dao.updateProgress(job.url, DlStatus.ACTIVE, 92, now())
                             val totalMs = playable.episode.durationSec * 1000L
                             val keep = com.foundation.scpreader.playback.SponsorTrim.keepRanges(segs, totalMs)
                             val trimmed = File(filesDir, "audio/${slug(job.url)}.m4a")
@@ -510,13 +522,36 @@ class ScpRepository(
         )
     }
 
-    /** Streams [url] to [dest]; throws (with the HTTP code) on failure so callers can log the reason. */
-    private fun downloadFile(url: String, dest: File): Boolean {
+    /**
+     * Streams [url] to [dest]; throws (with the HTTP code) on failure so callers can log the reason.
+     * When the response advertises a Content-Length, [onProgress] is invoked with a 0f‥1f fraction
+     * as bytes arrive (throttled) so the UI can show a moving download percentage.
+     */
+    private suspend fun downloadFile(url: String, dest: File, onProgress: (suspend (Float) -> Unit)? = null): Boolean {
         val req = Request.Builder().url(url).header("User-Agent", "SCPReader/0.1").build()
         http.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) throw java.io.IOException("HTTP ${resp.code} fetching audio stream")
             val body = resp.body ?: throw java.io.IOException("empty audio response body")
-            body.byteStream().use { input -> dest.outputStream().use { input.copyTo(it) } }
+            val total = body.contentLength()
+            body.byteStream().use { input ->
+                dest.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var copied = 0L
+                    var lastReported = -1
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                        copied += read
+                        if (onProgress != null && total > 0) {
+                            val frac = (copied.toFloat() / total).coerceIn(0f, 1f)
+                            // Only emit on whole-percent changes to avoid hammering the DB.
+                            val pct = (frac * 100).toInt()
+                            if (pct != lastReported) { lastReported = pct; onProgress(frac) }
+                        }
+                    }
+                }
+            }
         }
         return true
     }
