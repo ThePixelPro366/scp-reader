@@ -119,6 +119,14 @@ class ScpScraper {
         if (acs != null) blocks.add(acs)
         walk(content, blocks)
 
+        // Newer articles state the class only in the ACS bar (no "Object Class:" body line), so fall
+        // back to the parsed containment class. Any value flows to classBadgeRes(), which resolves it
+        // to the matching badge or the "?" unknown badge.
+        if (objectClass == null) {
+            objectClass = acs?.containment?.trim()?.takeIf { it.isNotEmpty() }
+                ?.lowercase()?.replaceFirstChar { it.uppercase() }
+        }
+
         // Surface footnotes as a trailing section so the in-text reference numbers resolve.
         if (footnoteBlocks.isNotEmpty()) {
             blocks.add(ContentBlock.Heading("Footnotes"))
@@ -248,9 +256,14 @@ class ScpScraper {
         return src.takeIf { it.startsWith("http") && !it.contains("data:") }
     }
 
+    /**
+     * Pull the object/containment class from a body line like "Object Class: Keter" or the newer
+     * "Containment Class: Euclid". Case-insensitive; captures a single class token (letters/hyphen),
+     * so esoteric classes (Thaumiel, Cernunnos, Ticonderoga, …) resolve just like the main ones.
+     */
     private fun parseObjectClass(text: String): String? {
-        val m = Regex("Object Class[:\\s]+([A-Za-z-]+)", RegexOption.IGNORE_CASE).find(text) ?: return null
-        return m.groupValues[1].replaceFirstChar { it.uppercase() }
+        val m = Regex("(?:Object|Containment)\\s*Class[:\\s]+([A-Za-z][A-Za-z-]+)", RegexOption.IGNORE_CASE).find(text) ?: return null
+        return m.groupValues[1].lowercase().replaceFirstChar { it.uppercase() }
     }
 
     private fun isMetaLine(text: String): Boolean {

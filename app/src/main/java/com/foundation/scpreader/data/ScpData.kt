@@ -110,8 +110,13 @@ data class Episode(
 object Taxonomy {
     private val CLASS_TAGS = linkedMapOf(
         "safe" to "Safe", "euclid" to "Euclid", "keter" to "Keter", "thaumiel" to "Thaumiel",
-        "neutralized" to "Neutralized", "explained" to "Explained", "apollyon" to "Apollyon",
-        "archon" to "Archon", "esoteric-class" to "Esoteric",
+        "neutralized" to "Neutralized", "explained" to "Explained", "pending" to "Pending",
+        "apollyon" to "Apollyon", "archon" to "Archon",
+        // Esoteric / secondary object classes (wikidot tags), each with dedicated badge art.
+        "cernunnos" to "Cernunnos", "hiemal" to "Hiemal", "tiamat" to "Tiamat",
+        "ticonderoga" to "Ticonderoga", "uncontained" to "Uncontained",
+        "decommissioned" to "Decommissioned", "anomalous" to "Anomalous",
+        "maksur" to "Maksur", "zeno" to "Zeno",
     )
 
     fun objectClass(tags: List<String>): String {

@@ -1,7 +1,9 @@
 package com.foundation.scpreader.ui.components
 
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,12 +24,52 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.foundation.scpreader.R
 import com.foundation.scpreader.ui.theme.LocalScpScheme
 import com.foundation.scpreader.ui.theme.classColors
+
+/**
+ * Maps an object-class name to its SCP gear-badge drawable (black disc + white symbol). Matching is
+ * case-insensitive and tolerant of whitespace/hyphens/suffixes (e.g. "esoteric-class", "Keter-class"),
+ * so classes parsed from tags, the ACS bar or article text all resolve. Any class we don't have art
+ * for — including "Unknown" and the long tail of one-off esoteric classes — falls back to the "?" badge.
+ */
+@DrawableRes
+fun classBadgeRes(objectClass: String): Int {
+    val key = objectClass.trim().lowercase().substringBefore(' ').removeSuffix("-class").trim('-', ' ')
+    return when (key) {
+        "safe" -> R.drawable.class_safe
+        "euclid" -> R.drawable.class_euclid
+        "keter" -> R.drawable.class_keter
+        "thaumiel" -> R.drawable.class_thaumiel
+        "archon" -> R.drawable.class_archon
+        "neutralized", "decommissioned-neutralized" -> R.drawable.class_neutralized
+        "apollyon" -> R.drawable.class_apollyon
+        "explained" -> R.drawable.class_explained
+        "pending" -> R.drawable.class_pending
+        "cernunnos" -> R.drawable.class_cernunnos
+        "hiemal" -> R.drawable.class_hiemal
+        "tiamat" -> R.drawable.class_tiamat
+        "ticonderoga" -> R.drawable.class_ticonderoga
+        "uncontained" -> R.drawable.class_uncontained
+        "decommissioned" -> R.drawable.class_decommissioned
+        "anomalous" -> R.drawable.class_anomalous
+        "maksur" -> R.drawable.class_maksur
+        "zeno" -> R.drawable.class_zeno
+        else -> R.drawable.class_unknown
+    }
+}
+
+/** The class gear-badge as an icon (rendered untinted so its black/white art shows true). */
+@Composable
+fun ClassBadgeIcon(objectClass: String, size: Int = 22) {
+    Image(painterResource(classBadgeRes(objectClass)), contentDescription = null, modifier = Modifier.size(size.dp))
+}
 
 /** Object-class badge pill (e.g. "Euclid", "Keter"). */
 @Composable

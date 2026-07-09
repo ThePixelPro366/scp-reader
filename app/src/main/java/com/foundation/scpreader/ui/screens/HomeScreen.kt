@@ -49,6 +49,7 @@ import com.foundation.scpreader.HeroMode
 import com.foundation.scpreader.data.ScpItem
 import com.foundation.scpreader.ui.components.AppIcons
 import com.foundation.scpreader.ui.components.ClassBadge
+import com.foundation.scpreader.ui.components.ClassBadgeIcon
 import com.foundation.scpreader.ui.components.FilterChip
 import com.foundation.scpreader.ui.components.Mono
 import com.foundation.scpreader.ui.components.ScpPullSpinner
@@ -479,18 +480,16 @@ private fun FeedCard(app: AppState, item: ScpItem) {
             }
         }
         Column(Modifier.padding(start = 17.dp, end = 17.dp, top = 15.dp, bottom = 16.dp)) {
+            // Reads left-to-right: class badge icon, class name, then the SCP id.
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ClassBadgeIcon(item.objectClass, size = 24)
                 ClassBadge(item.objectClass, app.isDark)
-                Text(
-                    item.typeLabel.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.4.sp, color = c.onSurfaceVariant,
-                    modifier = Modifier.clip(RoundedCornerShape(7.dp)).border(1.dp, c.outlineVariant, RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
-                )
+                Text(item.number, fontFamily = Mono, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.primary)
                 Box(Modifier.weight(1f))
                 if (item.podcast) Icon(AppIcons.Headphones, null, Modifier.size(20.dp), tint = c.primary)
                 if (item.downloaded) Icon(AppIcons.DownloadDone, null, Modifier.size(20.dp), tint = c.primary)
             }
-            Text(item.number, fontFamily = Mono, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = c.primary, modifier = Modifier.padding(top = 12.dp))
-            Text(item.title, fontSize = 19.sp, fontWeight = FontWeight.Medium, color = c.onSurface, lineHeight = 23.sp)
+            Text(item.title, fontSize = 19.sp, fontWeight = FontWeight.Medium, color = c.onSurface, lineHeight = 23.sp, modifier = Modifier.padding(top = 10.dp))
             if (item.excerpt.isNotEmpty()) {
                 Text(item.excerpt, fontSize = 14.sp, color = c.onSurfaceVariant, lineHeight = 20.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
             }

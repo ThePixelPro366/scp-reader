@@ -71,6 +71,7 @@ import com.foundation.scpreader.ReaderDlState
 import com.foundation.scpreader.data.ContentBlock
 import com.foundation.scpreader.data.ScpItem
 import com.foundation.scpreader.ui.components.AppIcons
+import com.foundation.scpreader.ui.components.ClassBadgeIcon
 import com.foundation.scpreader.ui.components.Mono
 import com.foundation.scpreader.ui.theme.LocalScpScheme
 import com.foundation.scpreader.ui.theme.classColors
@@ -358,20 +359,32 @@ private fun ArticleBlock(
 @Composable
 private fun AcsBar(acs: ContentBlock.Acs) {
     val c = LocalScpScheme.current
-    val fields = listOfNotNull(
-        acs.containment?.let { "Containment" to it },
+    // Secondary fields (below the containment header row) — the newer articles' disruption/risk band.
+    val subFields = listOfNotNull(
         acs.secondary?.let { "Secondary" to it },
         acs.disruption?.let { "Disruption" to it },
         acs.risk?.let { "Risk" to it },
     )
-    if (fields.isEmpty()) return
+    if (acs.containment == null && subFields.isEmpty()) return
     Column(Modifier.padding(top = 20.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.surfaceContainer).padding(14.dp)) {
         Text("ANOMALY CLASSIFICATION", fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, color = c.primary)
-        Row(Modifier.padding(top = 10.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            fields.forEach { (label, value) ->
-                Column(Modifier.weight(1f)) {
-                    Text(label.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.onSurfaceVariant)
-                    Text(value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.onSurface, modifier = Modifier.padding(top = 2.dp))
+        // Containment class as the banner header: the class gear badge next to its name.
+        if (acs.containment != null) {
+            Row(Modifier.padding(top = 12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ClassBadgeIcon(acs.containment, size = 44)
+                Column {
+                    Text("CONTAINMENT CLASS", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.onSurfaceVariant)
+                    Text(acs.containment.uppercase(), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = c.onSurface)
+                }
+            }
+        }
+        if (subFields.isNotEmpty()) {
+            Row(Modifier.padding(top = 12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                subFields.forEach { (label, value) ->
+                    Column(Modifier.weight(1f)) {
+                        Text(label.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.onSurfaceVariant)
+                        Text(value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.onSurface, modifier = Modifier.padding(top = 2.dp))
+                    }
                 }
             }
         }
