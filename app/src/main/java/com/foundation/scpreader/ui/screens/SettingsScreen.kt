@@ -37,7 +37,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -81,7 +80,18 @@ fun SettingsScreen(app: AppState) {
         }
     }
     Column(Modifier.fillMaxWidth().verticalScroll(scrollState).padding(bottom = 108.dp)) {
-        Text("Settings", fontSize = 28.sp, color = c.onSurface, modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 16.dp, bottom = 8.dp))
+        Row(
+            Modifier.fillMaxWidth().padding(start = 8.dp, end = 22.dp, top = 12.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Box(
+                Modifier.clip(CircleShape).clickable { app.go(com.foundation.scpreader.Screen.Home) }.padding(8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(AppIcons.ArrowBack, "Back", Modifier.size(24.dp), tint = c.onSurface)
+            }
+            Text("Settings", fontSize = 28.sp, color = c.onSurface)
+        }
 
         // ---- Appearance ----
         GroupLabel("Appearance")
@@ -246,20 +256,6 @@ fun SettingsScreen(app: AppState) {
             ToggleRow(AppIcons.Bookmark, "Auto-download bookmarks", "Save bookmarked articles offline automatically", app.autoDownloadBookmarks) { app.toggleAutoDownloadBookmarks() }
             Divider1()
             ToggleRow(AppIcons.Wifi, "Download over Wi-Fi only", null, app.wifiOnly) { app.toggleWifi() }
-            Divider1()
-            val ctx = androidx.compose.ui.platform.LocalContext.current
-            Row(
-                Modifier.fillMaxWidth().clickable { com.foundation.scpreader.ui.screens.openUrl(ctx, "https://podcasts.apple.com/podcast/id1453436915") }
-                    .padding(horizontal = 18.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                Icon(AppIcons.Headphones, null, Modifier.size(24.dp), tint = c.onSurfaceVariant)
-                Column(Modifier.weight(1f)) {
-                    Text("Podcast source", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface)
-                    Text("SCP Archives · open in Apple Podcasts", fontSize = 13.sp, color = c.onSurfaceVariant)
-                }
-                Icon(AppIcons.NorthEast, null, Modifier.size(20.dp), tint = c.onSurfaceVariant)
-            }
         }
 
         // ---- SponsorBlock ----
@@ -279,11 +275,49 @@ fun SettingsScreen(app: AppState) {
         GroupLabel("Updates")
         SettingsCard { UpdatesSection(app) }
 
-        Text(
-            "Content licensed CC BY-SA 3.0 · scp-wiki.wikidot.com",
-            fontSize = 12.sp, lineHeight = 19.sp, color = c.onSurfaceVariant, textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 26.dp, bottom = 10.dp),
-        )
+        // ---- About ----
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        GroupLabel("About")
+        SettingsCard {
+            LinkRow(AppIcons.Public, "SCP Wiki", "scp-wiki.wikidot.com") {
+                openUrl(ctx, "https://scp-wiki.wikidot.com")
+            }
+            Divider1()
+            LinkRow(AppIcons.SmartDisplay, "YouTube source", "SCP Archives · @SCParchives") {
+                openUrl(ctx, "https://www.youtube.com/@SCParchives")
+            }
+            Divider1()
+            LinkRow(AppIcons.Headphones, "Podcast source", "SCP Archives · open in Apple Podcasts") {
+                openUrl(ctx, "https://podcasts.apple.com/podcast/id1453436915")
+            }
+            Divider1()
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Icon(AppIcons.Info, null, Modifier.size(24.dp), tint = c.onSurfaceVariant)
+                Column(Modifier.weight(1f)) {
+                    Text("Content license", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface)
+                    Text("Licensed CC BY-SA 3.0 · scp-wiki.wikidot.com", fontSize = 13.sp, color = c.onSurfaceVariant, lineHeight = 18.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LinkRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+    val c = LocalScpScheme.current
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(icon, null, Modifier.size(24.dp), tint = c.onSurfaceVariant)
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface)
+            Text(subtitle, fontSize = 13.sp, color = c.onSurfaceVariant)
+        }
+        Icon(AppIcons.NorthEast, null, Modifier.size(20.dp), tint = c.onSurfaceVariant)
     }
 }
 
