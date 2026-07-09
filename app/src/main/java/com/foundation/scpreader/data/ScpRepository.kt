@@ -273,7 +273,49 @@ class ScpRepository(
 
     private fun slugFor(n: Int) = if (n < 1000) "scp-%03d".format(n) else "scp-$n"
     private suspend fun fetchNumber(n: Int): ScpItem? =
-        runCatching { crom.detail("http://scp-wiki.wikidot.com/${slugFor(n)}")?.first }.getOrNull()
+        runCatching { crom.detail("http://scp-wiki.wikidot.com/${slugFor(n)}") }.getOrNull()?.let { (item, source) ->
+            // CROM gives us title/rating/tags but no summary. Derive a short description from the
+            // page's raw wikidot source (already fetched here) so feed cards read like the mockup.
+            if (item.excerpt.isNotEmpty()) item else item.copy(excerpt = excerptFromSource(source))
+        }
+
+    /**
+     * Best-effort one-line summary pulled from a page's raw wikidot [source], for feed-card
+     * descriptions. Prefers the "Description" section, else the first substantial prose line,
+     * with the common wikidot markup stripped so the result reads as plain text.
+     */
+    private fun excerptFromSource(source: String?): String {
+        if (source.isNullOrBlank()) return ""
+        val lines = source.lines()
+        val descIdx = lines.indexOfFirst { Regex("\\*\\*\\s*Description", RegexOption.IGNORE_CASE).containsMatchIn(it) }
+        val ordered = if (descIdx >= 0) lines.drop(descIdx) + lines.take(descIdx) else lines
+        for (raw in ordered) {
+            var t = cleanSourceLine(raw)
+            // Drop a leading "Description:" / "Special Containment Procedures:" style label.
+            t = t.replaceFirst(Regex("^[^:]{0,48}:\\s*"), "").trim()
+            if (t.length >= 40 && !isSourceMeta(t)) {
+                return if (t.length > 180) t.take(179).trimEnd() + "…" else t
+            }
+        }
+        return ""
+    }
+
+    private fun cleanSourceLine(s: String): String = s
+        .replace(Regex("\\[\\[\\[[^\\]|]*\\|([^\\]]*)\\]\\]\\]"), "$1")   // [[[link|text]]] -> text
+        .replace(Regex("\\[\\[\\[([^\\]]*)\\]\\]\\]"), "$1")             // [[[text]]] -> text
+        .replace(Regex("\\[\\[[^\\]]*\\]\\]"), " ")                       // [[module]] tags -> removed
+        .replace(Regex("\\[[^\\s\\]]+\\s+([^\\]]*)\\]"), "$1")            // [url text] -> text
+        .replace(Regex("@@[^@]*@@"), "")                                  // @@literal@@ -> removed
+        .replace("**", "").replace("//", "").replace("__", "")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+
+    private fun isSourceMeta(t: String): Boolean {
+        val l = t.lowercase()
+        return l.startsWith("item #") || l.startsWith("object class") ||
+            l.startsWith("special containment") || l.startsWith("threat level") ||
+            l.startsWith("rating:") || l.startsWith("[[") || l.startsWith("http")
+    }
 
     /** Fetch [count] random articles in parallel — powers the "Random entries" discover feed. */
     suspend fun randomItems(count: Int, exclude: Set<String> = emptySet()): List<ScpItem> = coroutineScope {
