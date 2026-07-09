@@ -51,7 +51,7 @@ class ScpScraper {
         content.select(
             "style, script, .code, .page-rate-widget-box, .creditRate, .rate-box-with-credit-button, " +
                 ".licensebox, .license-area, .footer-wikiwalk-nav, #u-credit-view, .modal-container, " +
-                ".collapsible-block-folded, .footnotes-footer, .info-container, .anomaly-class-bar, " +
+                ".collapsible-block-folded, .footnotes-footer, .info-container, .anomaly-class-bar, .anom-bar-container, " +
                 ".scp-image-caption-source, .authorlink-wrapper"
         ).remove()
 
@@ -222,14 +222,21 @@ class ScpScraper {
      * class field is found, so articles without an ACS bar are unaffected.
      */
     private fun parseAcs(content: Element): ContentBlock.Acs? {
-        val bar = content.selectFirst("div.anomaly-class-bar") ?: return null
+        // The current ACS component ("anom-bar") wraps everything in `.anom-bar-container`; older
+        // skins used `.anomaly-class-bar`/`.anomaly-bar`. Each field's value sits in a `.class-text`
+        // node (older skins: `.type-text`), labelled by a sibling `.class-category`.
+        val bar = content.selectFirst(".anom-bar-container, .anomaly-class-bar, .anomaly-bar") ?: return null
         fun field(vararg sel: String): String? = sel.firstNotNullOfOrNull { s ->
-            bar.selectFirst("$s .type-text")?.text()?.trim()?.takeIf { it.isNotEmpty() }
+            (bar.selectFirst("$s .class-text") ?: bar.selectFirst("$s .type-text"))
+                ?.text()?.trim()?.takeIf { it.isNotEmpty() }
         }
-        val containment = field(".contain-class", ".object-class")
-        val disruption = field(".disrupt-class")
-        val risk = field(".risk-class")
-        val secondary = field(".secondary-class")
+        // Empty/placeholder values ("none", "n/a", "-") mean the field is unset — treat as absent.
+        fun clean(v: String?): String? =
+            v?.takeIf { it.isNotBlank() && !it.equals("none", true) && !it.equals("n/a", true) && it != "-" }
+        val containment = clean(field(".contain-class", ".object-class"))
+        val disruption = clean(field(".disrupt-class"))
+        val risk = clean(field(".risk-class"))
+        val secondary = clean(field(".second-class", ".secondary-class"))
         return if (containment == null && disruption == null && risk == null && secondary == null) null
         else ContentBlock.Acs(containment, disruption, risk, secondary)
     }

@@ -383,7 +383,7 @@ private fun AcsBar(acs: ContentBlock.Acs) {
                 subFields.forEach { (label, value) ->
                     Column(Modifier.weight(1f)) {
                         Text(label.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.onSurfaceVariant)
-                        Text(value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.onSurface, modifier = Modifier.padding(top = 2.dp))
+                        Text(value.uppercase(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.onSurface, modifier = Modifier.padding(top = 2.dp))
                     }
                 }
             }
