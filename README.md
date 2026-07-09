@@ -3,33 +3,23 @@
 An Android app for reading the SCP Foundation wiki. Browse and search the archive,
 save articles to read offline, and play the narration when it's available.
 
-> Unofficial — not affiliated with the SCP Foundation. Article text and the emblem
-> come from the SCP Wiki and are licensed under CC BY-SA 3.0.
+## Screenshots
+
+<img src="screenshots/gallery.png" width="760" alt="Home, Search, Library, Downloads, Settings, Reader and full-screen player screenshots" />
 
 ## Features
 
 - Browse the archive with an SCP of the Day highlight and random-entry discovery, filtered by SCP, Tales or GoI
-- Full-text search across SCPs, tales and GoI documents, sortable by relevance
-- Read articles with rendered collapsibles, redactions and the ACS bar, and follow wiki links inside the app
-- Play narration when it's available, with playback tracked per article
-- Save articles and narration for offline reading, with a storage breakdown in your library
+- Full-text search across SCPs, tales and GoI documents, with a Top Rated / Recently Viewed zero-state before you type
+- Read articles with rendered collapsibles, redactions, the ACS bar and object-class badges, and follow wiki links inside the app
+- Play YouTube-sourced narration in a full-screen player or the system media notification, with SponsorBlock segments (sponsor, intro, outro, filler and more) skipped automatically
+- Save articles and ad-free, SponsorBlock-trimmed narration for offline playback, with a storage breakdown and a browse-by-class filter in your library
 - Queue and manage downloads — including bulk download of random, top-rated, a series or the entire archive
 - Bookmarks and a recently-viewed list
 - Adjustable text size, light/dark/auto themes and dynamic color from your wallpaper
 - Tune discovery: choose the home highlight and exclude object classes from random picks
-- Auto-skip SponsorBlock segments in narrations (sponsor, intro, outro, filler and more)
 - Resumes where you left off
-
-## Screenshots
-
-<p>
-  <img src="screenshots/shot_01.png" width="240" alt="Home" />
-  <img src="screenshots/shot_article.png" width="240" alt="Article" />
-  <img src="screenshots/shot_search.png" width="240" alt="Search" />
-  <img src="screenshots/shot_library.png" width="240" alt="Library" />
-  <img src="screenshots/shot_downloads.png" width="240" alt="Downloads" />
-  <img src="screenshots/shot_settings.jpg" width="240" alt="Settings" />
-</p>
+- Checks for new releases and installs updates in-app
 
 ## Building
 
