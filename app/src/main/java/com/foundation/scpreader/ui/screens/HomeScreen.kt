@@ -71,10 +71,34 @@ fun TypeChipRow(app: AppState, padding: Modifier) {
     }
 }
 
+@Composable
+private fun SeriesPickerRow(app: AppState) {
+    val c = LocalScpScheme.current
+    Row(
+        Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp).fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        (1..9).forEach { n ->
+            val active = app.feedSeries == n
+            Box(
+                Modifier.height(36.dp).clip(RoundedCornerShape(10.dp))
+                    .background(if (active) c.primary else Color.Transparent)
+                    .then(if (active) Modifier else Modifier.border(1.dp, c.outlineVariant, RoundedCornerShape(10.dp)))
+                    .clickable { app.selectFeedSeries(n) }.padding(horizontal = 16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("Series $n", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (active) c.onPrimary else c.onSurfaceVariant)
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(app: AppState) {
     val c = LocalScpScheme.current
+    // Offline with nothing cached to show: dedicated full-screen offline state.
+    if (app.offlineMode && !app.feedLoading) { OfflineScreen(app); return }
     val ptrState = rememberPullToRefreshState()
     PullToRefreshBox(
         isRefreshing = app.heroRefreshing,
@@ -129,9 +153,13 @@ fun HomeScreen(app: AppState) {
             Text("Search items, tales, GoI…", fontSize = 15.sp, color = c.onSurfaceVariant)
         }
 
+        if (app.offline) OfflineBanner()
+
         HeroSlot(app)
 
         TypeChipRow(app, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp).fillMaxWidth())
+
+        if (app.typeFilter == "series") SeriesPickerRow(app)
 
         Row(
             Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 8.dp),
@@ -263,6 +291,145 @@ private fun HeroPlaceholder(text: String) {
             .clip(RoundedCornerShape(28.dp)).background(c.surfaceCLow).padding(20.dp),
     ) {
         Text(text, fontSize = 14.sp, color = c.onSurfaceVariant, lineHeight = 20.sp)
+    }
+}
+
+@Composable
+private fun OfflineBanner() {
+    val c = LocalScpScheme.current
+    Row(
+        Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp).fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp)).background(c.surfaceContainer).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(AppIcons.CloudOff, null, Modifier.size(20.dp), tint = c.primary)
+        Column(Modifier.weight(1f)) {
+            Text("No internet connection", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.onSurface)
+            Text("Showing what's saved — new entries need a connection.", fontSize = 12.sp, color = c.onSurfaceVariant, lineHeight = 16.sp)
+        }
+    }
+}
+
+/** Full-screen "You're offline" state (mockup: Offline Screen) shown when nothing is cached. */
+@Composable
+private fun OfflineScreen(app: AppState) {
+    val c = LocalScpScheme.current
+    val done = app.downloads.filter { it.status == com.foundation.scpreader.database.DlStatus.DONE }
+    val sizeBytes = done.sumOf { it.sizeBytes }
+    val hasAudio = done.any { it.hasAudio }
+    Column(Modifier.fillMaxSize()) {
+        // top bar: settings entry (replaces the bottom nav, which is hidden while offline)
+        Row(
+            Modifier.fillMaxWidth().padding(start = 22.dp, end = 10.dp, top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.weight(1f))
+            Box(
+                Modifier.clip(CircleShape).clickable { app.go(com.foundation.scpreader.Screen.Settings) }.padding(8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(AppIcons.Settings, "Settings", Modifier.size(26.dp), tint = c.onSurfaceVariant)
+            }
+        }
+
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 26.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(Modifier.weight(1f))
+
+            // signal-lost glyph with an "available offline" badge
+            Box(contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.size(132.dp).clip(RoundedCornerShape(40.dp)).background(c.surfaceCLow)
+                        .border(1.dp, c.outlineVariant, RoundedCornerShape(40.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(AppIcons.WifiOff, null, Modifier.size(66.dp), tint = c.onSurfaceVariant)
+                }
+                Box(
+                    Modifier.align(Alignment.BottomEnd).offset(x = 10.dp, y = 10.dp)
+                        .size(40.dp).clip(RoundedCornerShape(14.dp)).background(c.primaryContainer)
+                        .border(3.dp, c.surface, RoundedCornerShape(14.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(AppIcons.DownloadDone, null, Modifier.size(20.dp), tint = c.onPrimaryContainer)
+                }
+            }
+
+            Text("SIGNAL LOST", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.4.sp, color = c.primary, modifier = Modifier.padding(top = 30.dp))
+            Text("You're offline", fontSize = 27.sp, fontWeight = FontWeight.Medium, color = c.onSurface, lineHeight = 31.sp, modifier = Modifier.padding(top = 8.dp))
+            Text(
+                "Can't reach the Foundation network right now. Everything you've saved is still fully readable.",
+                fontSize = 14.sp, lineHeight = 22.sp, color = c.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(top = 10.dp).width(270.dp),
+            )
+
+            // retry
+            Row(
+                Modifier.padding(top = 22.dp).height(52.dp).clip(RoundedCornerShape(26.dp)).background(c.primary)
+                    .clickable { app.loadFeed() }.padding(horizontal = 26.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Icon(AppIcons.Refresh, null, Modifier.size(21.dp), tint = c.onPrimary)
+                Text("Retry connection", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.onPrimary)
+            }
+            app.lastFeedSyncAt?.let { ts ->
+                Text("Last synced ${relativeTime(ts)}", fontSize = 13.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
+            }
+
+            Box(Modifier.weight(1f))
+
+            // available-offline card
+            Column(
+                Modifier.padding(top = 18.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp))
+                    .background(c.surfaceCLow).border(1.dp, c.outlineVariant, RoundedCornerShape(24.dp))
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(c.primaryContainer), contentAlignment = Alignment.Center) {
+                        Icon(AppIcons.DownloadForOffline, null, Modifier.size(23.dp), tint = c.onPrimaryContainer)
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text("${done.size} item${if (done.size == 1) "" else "s"} ready offline", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.onSurface)
+                        Text(
+                            if (done.isEmpty()) "Nothing saved yet" else formatSize(sizeBytes) + if (hasAudio) " · text & narration" else " · text",
+                            fontSize = 13.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 1.dp),
+                        )
+                    }
+                }
+                Row(Modifier.padding(top = 14.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(14.dp)).background(c.secondaryContainer)
+                            .clickable { app.go(com.foundation.scpreader.Screen.Library) },
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(AppIcons.LibraryBooks, null, Modifier.size(19.dp), tint = c.onSecondaryContainer)
+                        Text("Open library", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.onSecondaryContainer, modifier = Modifier.padding(start = 8.dp))
+                    }
+                    val recent = app.recentlyViewed.firstOrNull()
+                    Box(
+                        Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).border(1.dp, c.outlineVariant, RoundedCornerShape(14.dp))
+                            .clickable(enabled = recent != null) { recent?.let { app.openReaderItem(it) } },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(AppIcons.History, null, Modifier.size(21.dp), tint = if (recent != null) c.onSurfaceVariant else c.outlineVariant)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Coarse "N min/hour/day ago" label for the offline screen's last-synced line. */
+private fun relativeTime(ts: Long): String {
+    val mins = ((System.currentTimeMillis() - ts) / 60000L).coerceAtLeast(0)
+    return when {
+        mins < 1 -> "just now"
+        mins < 60 -> "$mins min ago"
+        mins < 1440 -> "${mins / 60} h ago"
+        else -> "${mins / 1440} d ago"
     }
 }
 

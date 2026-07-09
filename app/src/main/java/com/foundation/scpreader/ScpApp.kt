@@ -52,6 +52,13 @@ class AppContainer(context: Context) {
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
     }
 
+    /** True when a network capable of reaching the internet is currently active. */
+    fun isOnline(): Boolean {
+        val net = connectivity?.activeNetwork ?: return false
+        val caps = connectivity.getNetworkCapabilities(net) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
     val settingsStore = SettingsStore(appContext)
 
     /** Encrypted GitHub PAT storage + release-based update checker (see Settings > Updates). */

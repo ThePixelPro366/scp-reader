@@ -46,6 +46,7 @@ class AppState(
     private val settingsStore: SettingsStore,
     private val secureTokenStore: SecureTokenStore,
     private val updateManager: UpdateManager,
+    private val isOnline: () -> Boolean = { true },
 ) : ViewModel() {
 
     private var settingsLoaded = false
@@ -111,6 +112,16 @@ class AppState(
     private var feedRaw = listOf<ScpItem>()
     private var feedCursor: String? = null
     var feedHasMore by mutableStateOf(false); private set
+    /** True when the device has no internet connection — surfaced as a banner/message on Home. */
+    var offline by mutableStateOf(false); private set
+    /** Wall-clock time of the last successful feed load, for the offline screen's "last synced" line. */
+    var lastFeedSyncAt by mutableStateOf<Long?>(null); private set
+
+    /**
+     * Offline mode: no connection AND nothing cached to browse. In this mode the app collapses to
+     * just Home (the offline screen) ↔ Library ↔ Settings, and the bottom nav is hidden.
+     */
+    val offlineMode: Boolean get() = offline && feed.isEmpty()
     /** When on, the random discover feed only surfaces entries that have narration available. */
     var narratedOnly by mutableStateOf(false); private set
     private var loadedTag = ""
@@ -208,15 +219,29 @@ class AppState(
 
     fun selectHeroMode(m: HeroMode) { heroMode = m; loadHero() }
 
+    /** Which SCP series the Home "Series" filter is showing (1 = SCP-001‥999, 2 = 1000‥1999, …). */
+    var feedSeries by mutableStateOf(1); private set
+
     // ---- feed ----
     private fun feedTagFor(type: String) = when (type) {
-        "tale" -> "tale"; "goi" -> "goi-format"; else -> "scp"
+        "tale" -> "tale"; "goi" -> "goi-format"; "series" -> "crom:series-$feedSeries"; else -> "scp"
     }
 
-    /** All/SCP → an infinite "Random entries" discover feed; Tales/GoI → ranked CROM listing. */
+    /** All/SCP → an infinite "Random entries" discover feed; Tales/GoI/Series → ranked CROM listing. */
     val feedIsRandom: Boolean get() = typeFilter == "all" || typeFilter == "scp"
 
+    /** Switch which series the Home "Series" filter lists, reloading the feed if it's active. */
+    fun selectFeedSeries(n: Int) {
+        if (feedSeries == n) return
+        feedSeries = n
+        if (screen == Screen.Home && typeFilter == "series") loadFeed()
+    }
+
+    /** Re-check connectivity; call before/around network work so the Home banner stays current. */
+    fun refreshConnectivity() { offline = !isOnline() }
+
     fun loadFeed(reset: Boolean = true) {
+        refreshConnectivity()
         if (reset) { feedRaw = emptyList(); feedCursor = null; feed = emptyList() }
         feedLoading = true; feedError = null
         viewModelScope.launch {
@@ -243,6 +268,10 @@ class AppState(
             }
             feedLoading = false
             heroRefreshing = false
+            if (feedError == null && feed.isNotEmpty()) {
+                lastFeedSyncAt = System.currentTimeMillis()
+                offline = false
+            }
         }
     }
 
@@ -250,6 +279,7 @@ class AppState(
 
     /** Pull-to-refresh on Home: pull fresh random entries and refresh the trending hero. */
     fun refreshDiscover() {
+        refreshConnectivity()
         heroRefreshing = true
         viewModelScope.launch { trending = repo.trendingItem() }
         loadFeed(reset = true)
@@ -630,7 +660,7 @@ class AppState(
         fun factory(container: AppContainer): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T =
-                AppState(container.repository, container.player, container.settingsStore, container.secureTokenStore, container.updateManager) as T
+                AppState(container.repository, container.player, container.settingsStore, container.secureTokenStore, container.updateManager, container::isOnline) as T
         }
     }
 }

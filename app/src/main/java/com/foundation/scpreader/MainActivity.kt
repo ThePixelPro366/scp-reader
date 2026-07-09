@@ -192,7 +192,9 @@ private fun AppRoot(app: AppState) {
 
         Column(Modifier.align(Alignment.BottomCenter)) {
             MiniPlayer(app)
-            BottomNav(app)
+            // Offline mode collapses to Home ↔ Library ↔ Settings; the bottom nav (Search/Downloads)
+            // isn't useful with no connection, so hide it and navigate via on-screen buttons.
+            if (!app.offlineMode) BottomNav(app)
         }
 
         app.readerItem?.let { item -> ReaderScreen(app, item) }
