@@ -230,9 +230,22 @@ class ScpScraper {
             (bar.selectFirst("$s .class-text") ?: bar.selectFirst("$s .type-text"))
                 ?.text()?.trim()?.takeIf { it.isNotEmpty() }
         }
-        // Empty/placeholder values ("none", "n/a", "-") mean the field is unset — treat as absent.
-        fun clean(v: String?): String? =
-            v?.takeIf { it.isNotBlank() && !it.equals("none", true) && !it.equals("n/a", true) && it != "-" }
+        // Empty/placeholder values mean the field is unset — treat as absent. Besides "none"/"n/a"/
+        // "-", this drops unfilled ACS-template residue authors leave in place: Wikidot variables
+        // like "{$disruption-class}" (SCP-8840) and default tokens like "class_here" / "secondary-
+        // class" (SCP-7939). Comparison is separator-insensitive so "class_here"/"class-here" all
+        // match; real class names (safe, euclid, cernunnos, esoteric, …) never normalise into this set.
+        val acsPlaceholders = setOf(
+            "classhere", "containmentclass", "objectclass", "secondaryclass",
+            "disruptionclass", "riskclass", "esotericclass",
+        )
+        fun clean(v: String?): String? {
+            val t = v?.trim().orEmpty()
+            if (t.isBlank() || t == "-" || t.equals("none", true) || t.equals("n/a", true) || t.contains("{\$")) return null
+            val norm = t.lowercase().filter { it.isLetterOrDigit() }
+            if (norm.isEmpty() || norm in acsPlaceholders) return null
+            return t
+        }
         val containment = clean(field(".contain-class", ".object-class"))
         val disruption = clean(field(".disrupt-class"))
         val risk = clean(field(".risk-class"))
