@@ -14,6 +14,18 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.SmartDisplay
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
@@ -52,6 +64,7 @@ import androidx.compose.material.icons.filled.TextIncrease
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material.icons.outlined.Downloading
@@ -75,10 +88,23 @@ object AppIcons {
     val NorthEast = Icons.Filled.NorthEast
     val DragIndicator = Icons.Filled.DragIndicator
     val Close = Icons.Filled.Close
+    val GridView = Icons.Filled.GridView
+    val Lock = Icons.Filled.Lock
+    val Warning = Icons.Filled.Warning
+    val LocalFireDepartment = Icons.Filled.LocalFireDepartment
+    val Shield = Icons.Filled.Shield
+    val Block = Icons.Filled.Block
+    val Lightbulb = Icons.Filled.Lightbulb
+    val Category = Icons.Filled.Category
+    val CloudOff = Icons.Filled.CloudOff
+    val Public = Icons.Filled.Public
+    val Info = Icons.Filled.Info
+    val SmartDisplay = Icons.Filled.SmartDisplay
     val CheckCircle = Icons.Filled.CheckCircle
     val Palette = Icons.Filled.Palette
     val TextFields = Icons.Filled.TextFields
     val Wifi = Icons.Filled.Wifi
+    val WifiOff = Icons.Filled.WifiOff
     val SignalCellularAlt = Icons.Filled.SignalCellularAlt
     val BatteryFull = Icons.Filled.BatteryFull
     val LightMode = Icons.Filled.LightMode
