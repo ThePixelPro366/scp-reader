@@ -84,6 +84,8 @@ class AppState(
     var searchSort by mutableStateOf(SortMode.Relevance)
     var audioOnly by mutableStateOf(false)
     var libTab by mutableStateOf("all")
+    /** Library "browse offline by class" filter — an object class name, or "all". */
+    var libClassFilter by mutableStateOf("all")
 
     // Full-screen narration player overlay.
     var playerFullScreen by mutableStateOf(false)
@@ -627,6 +629,7 @@ class AppState(
         applySearchFilters()
     }
     fun selectLibTab(t: String) { libTab = t }
+    fun selectLibClass(cls: String) { libClassFilter = if (libClassFilter == cls) "all" else cls }
     fun selectRandomType(t: RandomType) { randomType = t }
     fun selectRandomMode(m: RandomMode) { randomMode = m }
     fun addRandomTag(raw: String) {

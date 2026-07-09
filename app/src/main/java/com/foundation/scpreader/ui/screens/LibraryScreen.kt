@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -36,6 +38,7 @@ import com.foundation.scpreader.ui.components.Divider1
 import com.foundation.scpreader.ui.components.Dot
 import com.foundation.scpreader.ui.components.FilterChip
 import com.foundation.scpreader.ui.theme.LocalScpScheme
+import com.foundation.scpreader.ui.theme.classColors
 
 private val libDefs = listOf("all" to "All", "downloaded" to "Downloaded", "audio" to "With audio")
 
@@ -72,10 +75,25 @@ fun LibraryScreen(app: AppState) {
         "downloaded" -> rows.filter { it.downloaded }
         "audio" -> rows.filter { it.audio }
         else -> rows
-    }
+    }.filter { app.libClassFilter == "all" || it.item.objectClass == app.libClassFilter }
 
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 108.dp)) {
-        Text("Library", fontSize = 28.sp, color = c.onSurface, modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 16.dp, bottom = 6.dp))
+        Row(
+            Modifier.fillMaxWidth().padding(start = if (app.offlineMode) 8.dp else 22.dp, end = 22.dp, top = 12.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // Offline mode hides the bottom nav, so give Library a back button to return Home.
+            if (app.offlineMode) {
+                Box(
+                    Modifier.size(40.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                        .clickable { app.go(com.foundation.scpreader.Screen.Home) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(AppIcons.ArrowBack, "Back", Modifier.size(24.dp), tint = c.onSurface)
+                }
+            }
+            Text("Library", fontSize = 28.sp, color = c.onSurface)
+        }
 
         // storage card
         Column(
@@ -105,6 +123,8 @@ fun LibraryScreen(app: AppState) {
                 StorageLegend(c.onSurfaceVariant, "Other", formatGb(otherBytes))
             }
         }
+
+        BrowseByClass(app, rows.map { it.item.objectClass })
 
         Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             libDefs.forEach { (k, label) ->
@@ -143,6 +163,60 @@ fun LibraryScreen(app: AppState) {
                 }
             }
         }
+    }
+}
+
+/** Canonical class order for the "browse offline by class" tiles; unknown classes sort last. */
+private val classOrder = listOf("Safe", "Euclid", "Keter", "Thaumiel", "Neutralized", "Explained", "Apollyon", "Esoteric", "Maksur")
+
+private fun classIcon(cls: String) = when (cls) {
+    "Safe" -> AppIcons.Lock
+    "Euclid" -> AppIcons.Warning
+    "Keter" -> AppIcons.LocalFireDepartment
+    "Thaumiel" -> AppIcons.Shield
+    "Neutralized" -> AppIcons.Block
+    "Explained" -> AppIcons.Lightbulb
+    else -> AppIcons.Category
+}
+
+/** "BROWSE BY CLASS" tile row — one tile per object class present in the library, plus All. */
+@Composable
+private fun BrowseByClass(app: AppState, classesInLibrary: List<String>) {
+    if (classesInLibrary.isEmpty()) return
+    val c = LocalScpScheme.current
+    val counts = classesInLibrary.groupingBy { it }.eachCount()
+    val classes = counts.keys.sortedWith(
+        compareBy({ classOrder.indexOf(it).let { i -> if (i < 0) Int.MAX_VALUE else i } }, { it })
+    )
+    Text(
+        "BROWSE BY CLASS", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp, color = c.primary,
+        modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 4.dp, bottom = 10.dp),
+    )
+    Row(
+        Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp).fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        ClassTile(app, "all", "All", AppIcons.GridView, classesInLibrary.size, null)
+        classes.forEach { cls ->
+            ClassTile(app, cls, cls, classIcon(cls), counts[cls] ?: 0, classColors(cls, app.isDark).second)
+        }
+    }
+}
+
+@Composable
+private fun ClassTile(app: AppState, key: String, label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, count: Int, accent: Color?) {
+    val c = LocalScpScheme.current
+    val active = app.libClassFilter == key
+    Column(
+        Modifier.width(74.dp).clip(RoundedCornerShape(16.dp))
+            .background(if (active) c.primaryContainer else c.surfaceCLow)
+            .border(1.dp, if (active) c.primary else c.outlineVariant, RoundedCornerShape(16.dp))
+            .clickable { app.selectLibClass(key) }.padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, null, Modifier.size(22.dp), tint = accent ?: if (active) c.onPrimaryContainer else c.onSurfaceVariant)
+        Text("$count", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = if (active) c.onPrimaryContainer else c.onSurface, modifier = Modifier.padding(top = 6.dp))
+        Text(label, fontSize = 12.sp, color = if (active) c.onPrimaryContainer else c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
     }
 }
 
