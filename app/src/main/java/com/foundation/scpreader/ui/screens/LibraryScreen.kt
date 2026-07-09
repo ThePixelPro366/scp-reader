@@ -1,5 +1,6 @@
 package com.foundation.scpreader.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,11 +27,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foundation.scpreader.AppState
+import com.foundation.scpreader.R
 import com.foundation.scpreader.data.toScpItem
 import com.foundation.scpreader.database.DlStatus
 import com.foundation.scpreader.ui.components.AppIcons
@@ -167,14 +170,22 @@ fun LibraryScreen(app: AppState) {
 }
 
 /** Canonical class order for the "browse offline by class" tiles; unknown classes sort last. */
-private val classOrder = listOf("Safe", "Euclid", "Keter", "Thaumiel", "Neutralized", "Explained", "Apollyon", "Esoteric", "Maksur")
+private val classOrder = listOf("Safe", "Euclid", "Keter", "Thaumiel", "Archon", "Neutralized", "Explained", "Apollyon", "Esoteric", "Maksur")
 
+/** Official SCP containment-class badge (black gear + white symbol) for the classes we have art for. */
+private fun classBadge(cls: String): Int? = when (cls) {
+    "Safe" -> R.drawable.class_safe
+    "Euclid" -> R.drawable.class_euclid
+    "Keter" -> R.drawable.class_keter
+    "Thaumiel" -> R.drawable.class_thaumiel
+    "Archon" -> R.drawable.class_archon
+    "Neutralized" -> R.drawable.class_neutralized
+    "Apollyon" -> R.drawable.class_apollyon
+    else -> null
+}
+
+/** Fallback Material icon for classes without a badge (Explained, Esoteric, Maksur, …). */
 private fun classIcon(cls: String) = when (cls) {
-    "Safe" -> AppIcons.Lock
-    "Euclid" -> AppIcons.Warning
-    "Keter" -> AppIcons.LocalFireDepartment
-    "Thaumiel" -> AppIcons.Shield
-    "Neutralized" -> AppIcons.Block
     "Explained" -> AppIcons.Lightbulb
     else -> AppIcons.Category
 }
@@ -196,15 +207,23 @@ private fun BrowseByClass(app: AppState, classesInLibrary: List<String>) {
         Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp).fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        ClassTile(app, "all", "All", AppIcons.GridView, classesInLibrary.size, null)
+        ClassTile(app, "all", "All", R.drawable.class_all, AppIcons.GridView, classesInLibrary.size, null)
         classes.forEach { cls ->
-            ClassTile(app, cls, cls, classIcon(cls), counts[cls] ?: 0, classColors(cls, app.isDark).second)
+            ClassTile(app, cls, cls, classBadge(cls), classIcon(cls), counts[cls] ?: 0, classColors(cls, app.isDark).second)
         }
     }
 }
 
 @Composable
-private fun ClassTile(app: AppState, key: String, label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, count: Int, accent: Color?) {
+private fun ClassTile(
+    app: AppState,
+    key: String,
+    label: String,
+    badgeRes: Int?,
+    fallbackIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    count: Int,
+    accent: Color?,
+) {
     val c = LocalScpScheme.current
     val active = app.libClassFilter == key
     Column(
@@ -214,8 +233,20 @@ private fun ClassTile(app: AppState, key: String, label: String, icon: androidx.
             .clickable { app.selectLibClass(key) }.padding(vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(icon, null, Modifier.size(22.dp), tint = accent ?: if (active) c.onPrimaryContainer else c.onSurfaceVariant)
-        Text("$count", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = if (active) c.onPrimaryContainer else c.onSurface, modifier = Modifier.padding(top = 6.dp))
+        if (badgeRes != null) {
+            // The SCP containment badge is a black gear + white symbol — draw it untinted so it
+            // renders in its true colours rather than being flattened to a single tint.
+            Image(painterResource(badgeRes), null, Modifier.size(30.dp))
+        } else {
+            Icon(fallbackIcon, null, Modifier.size(22.dp), tint = accent ?: if (active) c.onPrimaryContainer else c.onSurfaceVariant)
+        }
+        // Count keeps the per-class accent colour (the association the filter previously showed via
+        // the icon tint), except on the active tile where onPrimaryContainer stays legible.
+        Text(
+            "$count", fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+            color = if (active) c.onPrimaryContainer else (accent ?: c.onSurface),
+            modifier = Modifier.padding(top = 6.dp),
+        )
         Text(label, fontSize = 12.sp, color = if (active) c.onPrimaryContainer else c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
     }
 }
