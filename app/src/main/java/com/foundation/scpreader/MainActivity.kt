@@ -216,7 +216,7 @@ private fun AppRoot(app: AppState) {
 private fun UpdateBanner(app: AppState, tag: String) {
     val c = LocalScpScheme.current
     Row(
-        Modifier.fillMaxWidth().background(c.secondaryContainer).clickable { app.go(Screen.Settings) }
+        Modifier.fillMaxWidth().background(c.secondaryContainer).clickable { app.scrollSettingsToUpdates = true; app.go(Screen.Settings) }
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),

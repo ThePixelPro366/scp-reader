@@ -72,6 +72,8 @@ class AppState(
     var updateStatus by mutableStateOf<UpdateCheckResult>(UpdateCheckResult.Idle); private set
     var updateDownload by mutableStateOf<UpdateDownloadState>(UpdateDownloadState.Idle); private set
     var updateBannerDismissed by mutableStateOf(false)
+    // Set when Settings is opened via the update banner so it auto-scrolls to the Updates section.
+    var scrollSettingsToUpdates by mutableStateOf(false)
 
     var searchQuery by mutableStateOf("")
     var typeFilter by mutableStateOf("all")

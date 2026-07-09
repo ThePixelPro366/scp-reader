@@ -56,6 +56,7 @@ import com.foundation.scpreader.ui.theme.SeedKey
 import com.foundation.scpreader.update.UpdateCheckResult
 import com.foundation.scpreader.update.UpdateDownloadState
 import com.foundation.scpreader.update.installApk
+import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
 
 private val modeDefs = listOf(
@@ -68,7 +69,18 @@ private val modeDefs = listOf(
 @Composable
 fun SettingsScreen(app: AppState) {
     val c = LocalScpScheme.current
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 108.dp)) {
+    val scrollState = rememberScrollState()
+    // Arriving from the update banner: jump to the Updates section at the bottom.
+    androidx.compose.runtime.LaunchedEffect(app.scrollSettingsToUpdates) {
+        if (app.scrollSettingsToUpdates) {
+            // maxValue is 0 until the content is measured, so wait for it before scrolling.
+            androidx.compose.runtime.snapshotFlow { scrollState.maxValue }
+                .first { it > 0 }
+            scrollState.animateScrollTo(scrollState.maxValue)
+            app.scrollSettingsToUpdates = false
+        }
+    }
+    Column(Modifier.fillMaxWidth().verticalScroll(scrollState).padding(bottom = 108.dp)) {
         Text("Settings", fontSize = 28.sp, color = c.onSurface, modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 16.dp, bottom = 8.dp))
 
         // ---- Appearance ----
