@@ -3,6 +3,12 @@
 An Android app for reading the SCP Foundation wiki. Browse and search the archive,
 save articles to read offline, and play the narration when it's available.
 
+## Attribution
+
+- Article text and images are from the [SCP Foundation wiki](https://scp-wiki.wikidot.com), licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). The app links back to each article's original wiki page and repeats this attribution in the reader itself.
+- The SCP emblem is from [Wikimedia](https://commons.wikimedia.org/), also CC BY-SA 3.0.
+- Narration audio is produced by [SCP Archives](https://www.youtube.com/@SCParchives) and sourced from their YouTube videos (with their Apple Podcasts feed as a fallback). The reader links to the specific YouTube video for any article with narration, with credit shown alongside it.
+
 ## Screenshots
 
 <img src="screenshots/gallery.png" width="760" alt="Home, Search, Library, Downloads, Settings, Reader and full-screen player screenshots" />

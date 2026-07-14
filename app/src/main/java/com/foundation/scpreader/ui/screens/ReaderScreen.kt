@@ -237,6 +237,42 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
                         Icon(AppIcons.NorthEast, null, Modifier.size(20.dp), tint = c.primary)
                         Text("Open original wiki page", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.primary, modifier = Modifier.weight(1f))
                     }
+
+                    // Watch the narration on YouTube — credits the narrator at the point their
+                    // work is used, not just tucked away in Settings. Only shown when this article
+                    // actually has a YouTube-sourced episode (videoId is the source of truth).
+                    if (episode?.source == com.foundation.scpreader.data.NarrationSource.YOUTUBE && episode.videoId != null) {
+                        Row(
+                            Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                                .border(1.dp, c.outlineVariant, RoundedCornerShape(16.dp))
+                                .clickable { openUrl(ctx, "https://www.youtube.com/watch?v=${episode.videoId}") }
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Icon(AppIcons.SmartDisplay, null, Modifier.size(20.dp), tint = c.primary)
+                            Column(Modifier.weight(1f)) {
+                                Text("Watch narration on YouTube", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.primary)
+                                Text("Narration by SCP Archives", fontSize = 12.sp, color = c.onSurfaceVariant)
+                            }
+                        }
+                    }
+
+                    // CC BY-SA 3.0 attribution — per-article, not just a one-time Settings mention,
+                    // since that's the point of use the license's attribution requirement is about.
+                    Column(Modifier.padding(top = 20.dp, bottom = 4.dp)) {
+                        val attrText = buildAnnotatedString {
+                            append("Article text and images are from the ")
+                            withLink(LinkAnnotation.Clickable(tag = "wiki", styles = TextLinkStyles(SpanStyle(color = c.primary, textDecoration = TextDecoration.Underline))) { openUrl(ctx, item.url) }) {
+                                append("SCP Foundation wiki")
+                            }
+                            append(", licensed under ")
+                            withLink(LinkAnnotation.Clickable(tag = "cc", styles = TextLinkStyles(SpanStyle(color = c.primary, textDecoration = TextDecoration.Underline))) { openUrl(ctx, "https://creativecommons.org/licenses/by-sa/3.0/") }) {
+                                append("CC BY-SA 3.0")
+                            }
+                            append(".")
+                        }
+                        Text(attrText, fontSize = 12.sp, lineHeight = 17.sp, color = c.onSurfaceVariant)
+                    }
                 }
             }
 
