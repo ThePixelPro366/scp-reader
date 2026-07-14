@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,6 +58,7 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -64,6 +66,7 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import com.foundation.scpreader.data.InlineSpan
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.foundation.scpreader.AppState
@@ -97,6 +100,8 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
 
     val linkCtx = androidx.compose.ui.platform.LocalContext.current
     val onLink: (String) -> Unit = { url -> app.openLink(url, linkCtx) }
+    // Body text of the currently-tapped footnote marker, shown in a bottom popup; null = closed.
+    var footnotePopup by remember(item.url) { androidx.compose.runtime.mutableStateOf<String?>(null) }
 
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
@@ -204,8 +209,9 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
                     // Revealed redaction keys, reset per article.
                     val revealed = remember(item.url) { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
                     val onReveal: (String) -> Unit = { k -> revealed[k] = revealed[k] != true }
+                    val onFootnoteTap: (String) -> Unit = { text -> footnotePopup = text }
                     blocks.forEachIndexed { idx, block ->
-                        ArticleBlock(app, block, "b$idx", bodyPx, headPx, onLink, revealed, onReveal)
+                        ArticleBlock(app, block, "b$idx", bodyPx, headPx, onLink, revealed, onReveal, onFootnoteTap)
                     }
                     if (blocks.isEmpty()) {
                         Text("No content available.", fontSize = bodyPx.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 24.dp))
@@ -252,6 +258,32 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
     }
 
     if (app.readerMenuOpen) ReaderDownloadMenu(app, hasEpisode = episode != null, offlineLabel = offlineLabel)
+    footnotePopup?.let { text -> FootnotePopup(text) { footnotePopup = null } }
+}
+
+/** Bottom sheet-style popup for a tapped footnote marker — tap the scrim or the close icon to dismiss. */
+@Composable
+private fun FootnotePopup(text: String, onDismiss: () -> Unit) {
+    val c = LocalScpScheme.current
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)).clickable(
+        indication = null,
+        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+    ) { onDismiss() })
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        Column(
+            Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
+                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)).background(c.surfaceCHigh)
+                .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 22.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("FOOTNOTE", fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, color = c.primary, modifier = Modifier.weight(1f))
+                Box(Modifier.size(32.dp).clip(CircleShape).clickable { onDismiss() }, contentAlignment = Alignment.Center) {
+                    Icon(AppIcons.Close, "Close", Modifier.size(18.dp), tint = c.onSurfaceVariant)
+                }
+            }
+            Text(text, fontSize = 15.sp, lineHeight = 22.sp, color = c.onSurface, modifier = Modifier.padding(top = 10.dp))
+        }
+    }
 }
 
 /**
@@ -267,6 +299,7 @@ private fun markup(
     keyPrefix: String = "",
     revealed: Map<String, Boolean> = emptyMap(),
     onReveal: (String) -> Unit = {},
+    onFootnoteTap: (String) -> Unit = {},
 ): AnnotatedString {
     if (spans.isEmpty()) return AnnotatedString(fallback)
     return buildAnnotatedString {
@@ -279,6 +312,17 @@ private fun markup(
                 else SpanStyle(color = redactColor, background = redactColor)
                 val link = LinkAnnotation.Clickable(tag = key) { onReveal(key) }
                 withLink(link) { withStyle(redStyle) { append(s.text) } }
+                return@forEachIndexed
+            }
+            // Footnote marker: a small, raised, tappable number — tapping surfaces its body text
+            // (see the reader's footnote popup) instead of scrolling away to a footer list.
+            if (s.footnote != null) {
+                val link = LinkAnnotation.Clickable(tag = "fn$keyPrefix#$idx") { onFootnoteTap(s.footnote) }
+                withLink(link) {
+                    withStyle(SpanStyle(color = linkColor, fontSize = 0.72.em, baselineShift = BaselineShift.Superscript)) {
+                        append("[${s.text}]")
+                    }
+                }
                 return@forEachIndexed
             }
             val decoration = when {
@@ -306,7 +350,7 @@ private fun markup(
     }
 }
 
-/** Renders one article block. Recurses for collapsible content, so it must be a composable. */
+/** Renders one article block. Recurses for collapsible/tab content, so it must be a composable. */
 @Composable
 private fun ArticleBlock(
     app: AppState,
@@ -317,14 +361,15 @@ private fun ArticleBlock(
     onLink: (String) -> Unit,
     revealed: Map<String, Boolean>,
     onReveal: (String) -> Unit,
+    onFootnoteTap: (String) -> Unit = {},
 ) {
     val c = LocalScpScheme.current
     when (block) {
-        is ContentBlock.Heading -> Text(markup(block.spans, block.text, c.primary, onLink, c.onSurface, key, revealed, onReveal), fontSize = headPx.sp, fontWeight = FontWeight.SemiBold, color = c.primary, modifier = Modifier.padding(top = 24.dp))
-        is ContentBlock.Paragraph -> Text(markup(block.spans, block.text, c.primary, onLink, c.onSurface, key, revealed, onReveal), fontSize = bodyPx.sp, lineHeight = (bodyPx * 1.62f).sp, color = c.onSurface, modifier = Modifier.padding(top = 12.dp))
+        is ContentBlock.Heading -> Text(markup(block.spans, block.text, c.primary, onLink, c.onSurface, key, revealed, onReveal, onFootnoteTap), fontSize = headPx.sp, fontWeight = FontWeight.SemiBold, color = c.primary, modifier = Modifier.padding(top = 24.dp))
+        is ContentBlock.Paragraph -> Text(markup(block.spans, block.text, c.primary, onLink, c.onSurface, key, revealed, onReveal, onFootnoteTap), fontSize = bodyPx.sp, lineHeight = (bodyPx * 1.62f).sp, color = c.onSurface, modifier = Modifier.padding(top = 12.dp))
         is ContentBlock.Quote -> Row(Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.surfaceContainer).height(IntrinsicSize.Min)) {
             Box(Modifier.width(4.dp).fillMaxHeight().background(c.primary))
-            Text(markup(block.spans, block.text, c.primary, onLink, c.onSurface, key, revealed, onReveal), fontSize = bodyPx.sp, lineHeight = (bodyPx * 1.62f).sp, color = c.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+            Text(markup(block.spans, block.text, c.primary, onLink, c.onSurface, key, revealed, onReveal, onFootnoteTap), fontSize = bodyPx.sp, lineHeight = (bodyPx * 1.62f).sp, color = c.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
         }
         is ContentBlock.Image -> if (app.loadImages) {
             Column(Modifier.padding(top = 20.dp)) {
@@ -347,7 +392,32 @@ private fun ArticleBlock(
                 if (expanded) {
                     Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp)) {
                         block.blocks.forEachIndexed { i, inner ->
-                            ArticleBlock(app, inner, "$key.$i", bodyPx, headPx, onLink, revealed, onReveal)
+                            ArticleBlock(app, inner, "$key.$i", bodyPx, headPx, onLink, revealed, onReveal, onFootnoteTap)
+                        }
+                    }
+                }
+            }
+        }
+        is ContentBlock.Tabs -> {
+            var selected by remember(key) { androidx.compose.runtime.mutableStateOf(0) }
+            Column(Modifier.padding(top = 14.dp).fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    block.panes.forEachIndexed { i, pane ->
+                        val active = i == selected
+                        Box(
+                            Modifier.clip(RoundedCornerShape(9.dp))
+                                .background(if (active) c.primary else c.surfaceContainer)
+                                .clickable { selected = i }.padding(horizontal = 14.dp, vertical = 9.dp),
+                        ) {
+                            Text(pane.label, fontSize = (bodyPx - 1).sp, fontWeight = FontWeight.Medium, color = if (active) c.onPrimary else c.onSurface)
+                        }
+                    }
+                }
+                val pane = block.panes.getOrNull(selected)
+                if (pane != null) {
+                    Column(Modifier.padding(top = 4.dp)) {
+                        pane.blocks.forEachIndexed { i, inner ->
+                            ArticleBlock(app, inner, "$key.t$selected.$i", bodyPx, headPx, onLink, revealed, onReveal, onFootnoteTap)
                         }
                     }
                 }

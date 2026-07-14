@@ -50,7 +50,12 @@ data class InlineSpan(
     @SerialName("s") val strike: Boolean = false,
     @SerialName("l") val link: String? = null,   // absolute href when this run is a hyperlink
     @SerialName("r") val redacted: Boolean = false, // censored run — rendered as a tap-to-reveal black bar
+    @SerialName("fn") val footnote: String? = null, // footnote marker run — text is the number, this is its body
 )
+
+/** One pane of a wiki `[[tabview]]`: [label] is the tab title, [blocks] its content. */
+@Serializable
+data class TabPane(val label: String, val blocks: List<ContentBlock>)
 
 /** A structured block of a rendered article, produced by the scraper. */
 @Serializable
@@ -63,6 +68,8 @@ sealed interface ContentBlock {
     @Serializable @SerialName("img") data class Image(val url: String, val caption: String) : ContentBlock
     /** A wiki collapsible (`+ Show…`): [title] is the fold label, [blocks] the hidden content. */
     @Serializable @SerialName("c") data class Collapsible(val title: String, val blocks: List<ContentBlock>) : ContentBlock
+    /** A wiki `[[tabview]]` (e.g. SCP-2317's "Iteration" tabs): exactly one [panes] entry shown at a time. */
+    @Serializable @SerialName("tabs") data class Tabs(val panes: List<TabPane>) : ContentBlock
     /** Anomaly Classification System bar; any field may be absent depending on the article. */
     @Serializable @SerialName("acs") data class Acs(
         val containment: String? = null,
