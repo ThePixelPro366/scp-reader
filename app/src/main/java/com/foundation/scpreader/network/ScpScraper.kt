@@ -39,9 +39,12 @@ class ScpScraper {
         // Map each footnote id ("footnote-1") to its body text, keyed before we strip the footer
         // chrome, so inline `sup.footnoteref` markers (handled in inlineSpans()) can carry their
         // own content for a tap-to-reveal popup instead of just a bare, dead-looking number.
-        // ownText() skips the leading "<a>1</a>" number anchor, leaving just ". <body>".
+        // Body text is often wrapped in <em>/<a>/etc (e.g. "1. <em>full sentence</em> - signature"),
+        // so we clone + drop the leading "<a>1</a>" anchor and read .text() (not ownText(), which
+        // only sees direct text nodes and silently drops anything inside a child element).
         val footnoteText = content.select("div.footnote-footer[id]").associate { fe ->
-            fe.id() to fe.ownText().trim().removePrefix(".").trim()
+            val body = fe.clone().apply { selectFirst("a")?.remove() }.text().trim().removePrefix(".").trim()
+            fe.id() to body
         }
         // Also keep the numbered list as a trailing section, matching the site's own footnotes
         // block at the foot of the article (each entry reads like "1. <text>").

@@ -405,7 +405,35 @@ class ScpRepository(
 
     suspend fun removeDownload(url: String) {
         dao.get(url)?.audioPath?.let { runCatching { File(it).delete() } }
+        runCatching { File(filesDir, "images/${slug(url)}").deleteRecursively() }
         dao.delete(url)
+    }
+
+    /**
+     * Downloads every `ContentBlock.Image` reachable from [blocks] (including nested collapsibles
+     * and tabs) to `filesDir/images/<slug>/`, returning the tree with [ContentBlock.Image.localPath]
+     * filled in plus the total bytes written. A single image's failure is non-fatal — it keeps its
+     * live [ContentBlock.Image.url] as a fallback rather than failing the whole download.
+     */
+    private suspend fun cacheImages(jobUrl: String, blocks: List<ContentBlock>): Pair<List<ContentBlock>, Long> {
+        var bytes = 0L
+        var index = 0
+        suspend fun rewrite(list: List<ContentBlock>): List<ContentBlock> = list.map { block ->
+            when (block) {
+                is ContentBlock.Image -> {
+                    val n = index++
+                    val ext = block.url.substringBefore('?').substringAfterLast('.', "jpg").take(4).ifBlank { "jpg" }
+                    val dest = File(filesDir, "images/${slug(jobUrl)}/$n.$ext").apply { parentFile?.mkdirs() }
+                    val ok = runCatching { downloadFile(block.url, dest) }.getOrDefault(false)
+                    if (ok) { bytes += dest.length(); block.copy(localPath = dest.absolutePath) }
+                    else { runCatching { dest.delete() }; block }
+                }
+                is ContentBlock.Collapsible -> block.copy(blocks = rewrite(block.blocks))
+                is ContentBlock.Tabs -> block.copy(panes = block.panes.map { it.copy(blocks = rewrite(it.blocks)) })
+                else -> block
+            }
+        }
+        return rewrite(blocks) to bytes
     }
 
     private fun startDownloadWorker() = scope.launch {
@@ -428,9 +456,13 @@ class ScpRepository(
         dao.updateProgress(job.url, DlStatus.ACTIVE, 5, now())
 
         val scraped = runCatching { scraper.fetch(job.url) }.getOrNull()
-        val blocks = scraped?.blocks?.takeIf { it.isNotEmpty() } ?: failureBlocks()
+        val rawBlocks = scraped?.blocks?.takeIf { it.isNotEmpty() } ?: failureBlocks()
+        // "Text" offline means the article reads the same offline as on — that includes its
+        // images, not just the words, so cache each ContentBlock.Image alongside the JSON body.
+        dao.updateProgress(job.url, DlStatus.ACTIVE, 10, now())
+        val (blocks, imageBytes) = cacheImages(job.url, rawBlocks)
         val blocksJson = json.encodeToString(blocksSerializer, blocks)
-        var size = blocksJson.toByteArray().size.toLong()
+        var size = blocksJson.toByteArray().size.toLong() + imageBytes
         // Text is done at this point. Text-only jumps to 90; an audio download still has the
         // (much longer) narration phase ahead, so it advances through finer milestones below
         // instead of parking at a single number while the network work runs.

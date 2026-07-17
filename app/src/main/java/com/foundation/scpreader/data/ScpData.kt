@@ -65,7 +65,8 @@ sealed interface ContentBlock {
     @Serializable @SerialName("p") data class Paragraph(val text: String, val spans: List<InlineSpan> = emptyList()) : ContentBlock
     /** A quoted passage (wiki `<blockquote>`); rendered as an indented, accented box. */
     @Serializable @SerialName("q") data class Quote(val text: String, val spans: List<InlineSpan> = emptyList()) : ContentBlock
-    @Serializable @SerialName("img") data class Image(val url: String, val caption: String) : ContentBlock
+    /** [localPath] is the on-disk copy once downloaded for offline reading; falls back to [url] when absent. */
+    @Serializable @SerialName("img") data class Image(val url: String, val caption: String, val localPath: String? = null) : ContentBlock
     /** A wiki collapsible (`+ Show…`): [title] is the fold label, [blocks] the hidden content. */
     @Serializable @SerialName("c") data class Collapsible(val title: String, val blocks: List<ContentBlock>) : ContentBlock
     /** A wiki `[[tabview]]` (e.g. SCP-2317's "Iteration" tabs): exactly one [panes] entry shown at a time. */

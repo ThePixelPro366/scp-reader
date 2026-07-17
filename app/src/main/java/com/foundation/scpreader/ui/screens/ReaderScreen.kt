@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -79,6 +80,7 @@ import com.foundation.scpreader.ui.components.Mono
 import com.foundation.scpreader.ui.theme.LocalScpScheme
 import com.foundation.scpreader.ui.theme.classColors
 import kotlin.math.roundToInt
+import java.io.File
 
 @Composable
 fun ReaderScreen(app: AppState, item: ScpItem) {
@@ -306,10 +308,12 @@ private fun FootnotePopup(text: String, onDismiss: () -> Unit) {
         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
     ) { onDismiss() })
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        val maxHeight = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * 0.7f
         Column(
-            Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
+            Modifier.fillMaxWidth().heightIn(max = maxHeight).windowInsetsPadding(WindowInsets.navigationBars)
                 .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)).background(c.surfaceCHigh)
-                .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 22.dp),
+                .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 22.dp)
+                .verticalScroll(rememberScrollState()),
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("FOOTNOTE", fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, color = c.primary, modifier = Modifier.weight(1f))
@@ -409,7 +413,8 @@ private fun ArticleBlock(
         }
         is ContentBlock.Image -> if (app.loadImages) {
             Column(Modifier.padding(top = 20.dp)) {
-                AsyncImage(model = block.url, contentDescription = block.caption, contentScale = ContentScale.FillWidth,
+                // Prefer the offline-cached file (downloaded articles) over the live wiki URL.
+                AsyncImage(model = block.localPath?.let(::File) ?: block.url, contentDescription = block.caption, contentScale = ContentScale.FillWidth,
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.surfaceCHigh))
                 if (block.caption.isNotEmpty()) Text(block.caption, fontSize = 12.sp, fontStyle = FontStyle.Italic, color = c.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             }
