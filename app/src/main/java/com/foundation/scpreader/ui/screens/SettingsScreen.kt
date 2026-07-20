@@ -155,6 +155,7 @@ fun SettingsScreen(app: AppState) {
                 HeroMode.ScpOfTheDay to "SCP of the Day",
                 HeroMode.Trending to "Trending",
                 HeroMode.RecentlyViewed to "Recently viewed",
+                HeroMode.FriendRecommendation to "Friend recommendation",
             )
             FlowRow(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 heroDefs.forEach { (m, label) ->
@@ -257,6 +258,57 @@ fun SettingsScreen(app: AppState) {
                 Divider1()
                 ToggleRow(AppIcons.FastForward, com.foundation.scpreader.playback.SponsorCategory.label(cat), null, app.sponsorCategories.contains(cat)) {
                     app.toggleSponsorCategory(cat)
+                }
+            }
+        }
+
+        // ---- Friends ----
+        GroupLabel("Friends")
+        SettingsCard {
+            Text("Server URL", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 2.dp))
+            Text("Backend for the friends & recommendations feature.", fontSize = 13.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 10.dp))
+            Row(
+                Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(
+                    Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(12.dp)).background(c.surface)
+                        .border(1.dp, c.outlineVariant, RoundedCornerShape(12.dp)).padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    if (app.serverUrl.isEmpty()) Text("https://your-domain/scp/", fontSize = 14.sp, color = c.onSurfaceVariant)
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = app.serverUrl,
+                        onValueChange = { app.updateServerUrl(it) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = c.onSurface),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(c.primary),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                        ),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { app.saveServerUrl() }),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Box(
+                    Modifier.height(48.dp).clip(RoundedCornerShape(12.dp)).background(c.primary).clickable { app.saveServerUrl() }.padding(horizontal = 18.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("Save", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.onPrimary)
+                }
+            }
+            app.friendCode?.let { code ->
+                Divider1()
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Icon(AppIcons.Group, null, Modifier.size(24.dp), tint = c.onSurfaceVariant)
+                    Column(Modifier.weight(1f)) {
+                        Text("Your friend code", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface)
+                        Text(code, fontSize = 13.sp, color = c.onSurfaceVariant)
+                    }
                 }
             }
         }

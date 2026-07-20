@@ -100,6 +100,9 @@ class AppContainer(context: Context) {
         isUnmetered = ::isUnmetered,
     )
 
+    /** Friends / recommendations backend (see /webserver). Anonymous device token, no accounts. */
+    val friendsRepository = com.foundation.scpreader.data.FriendsRepository(appContext, http, appScope)
+
     val player = PlayerController(context, appScope).also { pc ->
         // Persist playback position so an episode resumes where it was left off.
         pc.onPositionPersist = { mediaId, positionMs, durationMs ->
@@ -123,5 +126,7 @@ class ScpApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        // Background poll for new friend recommendations → local notification (no push backend).
+        com.foundation.scpreader.notify.RecommendationWorker.schedule(this)
     }
 }

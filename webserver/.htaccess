@@ -1,0 +1,16 @@
+# Forward the Authorization header to PHP. Many Apache/FastCGI setups strip it, which breaks
+# the Bearer-token auth (the app then sees "missing token"). Both lines cover different setups.
+SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+
+# Never serve the SQLite database, schema, or WAL/SHM sidecars over HTTP.
+<FilesMatch "\.(sqlite|sqlite-wal|sqlite-shm|sql)$">
+    Require all denied
+</FilesMatch>
+
+# Block the entire data/ directory too, in case it lands under the web root.
+RedirectMatch 403 ^/.*/data/.*$

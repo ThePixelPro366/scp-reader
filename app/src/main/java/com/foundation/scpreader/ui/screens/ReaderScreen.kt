@@ -141,6 +141,7 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
             Spacer(Modifier.weight(1f))
             IconBtn(AppIcons.TextDecrease, 20) { app.decFont() }
             IconBtn(AppIcons.TextIncrease, 24) { app.incFont() }
+            IconBtn(AppIcons.Group, 24) { app.openRecommendSheet() }
             val bookmarked = app.readerBookmarked
             Box(Modifier.size(44.dp).clip(CircleShape).clickable { app.toggleReaderBookmark() }, contentAlignment = Alignment.Center) {
                 Icon(if (bookmarked) AppIcons.Bookmark else AppIcons.BookmarkBorder, "Bookmark", Modifier.size(24.dp), tint = if (bookmarked) c.primary else c.onSurface)

@@ -122,6 +122,9 @@ dependencies {
     // Preferences DataStore (persisted settings)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
+    // WorkManager (background poll for new friend recommendations → local notification)
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
     // Room (offline-first source of truth)
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")

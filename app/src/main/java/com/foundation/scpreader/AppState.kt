@@ -22,15 +22,16 @@ import com.foundation.scpreader.database.DownloadEntity
 import com.foundation.scpreader.playback.PlayerController
 import com.foundation.scpreader.ui.theme.SeedKey
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
-enum class Screen { Home, Search, Library, Downloads, Settings }
+enum class Screen { Home, Search, Library, Downloads, Friends, Settings }
 enum class ThemeMode { Light, Auto, Dark }
 enum class ReaderDlState { Idle, Downloading, Done }
 enum class RandomType { Scp, Tale, Goi }
 enum class RandomMode { Pool, TopRated, Entire, Series }
 enum class DownloadPref { TextOnly, TextAudio, AudioOnly, Ask }
-enum class HeroMode { ContinueReading, ScpOfTheDay, Trending, RecentlyViewed }
+enum class HeroMode { ContinueReading, ScpOfTheDay, Trending, RecentlyViewed, FriendRecommendation }
 enum class SortMode { Relevance, Rating, Newest }
 
 data class ReaderDl(val state: ReaderDlState = ReaderDlState.Idle, val pct: Int = 0, val audio: Boolean = false)
@@ -44,6 +45,7 @@ class AppState(
     val player: PlayerController,
     private val settingsStore: SettingsStore,
     private val updateManager: UpdateManager,
+    private val friends: com.foundation.scpreader.data.FriendsRepository,
     private val isOnline: () -> Boolean = { true },
 ) : ViewModel() {
 
@@ -72,6 +74,20 @@ class AppState(
     var updateBannerDismissed by mutableStateOf(false)
     // Set when Settings is opened via the update banner so it auto-scrolls to the Updates section.
     var scrollSettingsToUpdates by mutableStateOf(false)
+
+    // ---- friends / recommendations (anonymous device token; backend in /webserver) ----
+    var friendCode by mutableStateOf<String?>(null); private set
+    var friendsList by mutableStateOf<List<com.foundation.scpreader.network.FriendsApi.Friend>>(emptyList()); private set
+    var recommendations by mutableStateOf<List<com.foundation.scpreader.network.FriendsApi.Rec>>(emptyList()); private set
+    var friendsLoading by mutableStateOf(false); private set
+    var friendsError by mutableStateOf<String?>(null); private set
+    var friendsNotice by mutableStateOf<String?>(null); private set
+    private var friendsNoticeJob: Job? = null
+    var addFriendInput by mutableStateOf("")
+    var serverUrl by mutableStateOf(com.foundation.scpreader.data.DEFAULT_FRIENDS_SERVER)
+    // Reader "recommend to friend" sheet.
+    var recommendSheetOpen by mutableStateOf(false); private set
+    var recommendNote by mutableStateOf("")
 
     var searchQuery by mutableStateOf("")
     var typeFilter by mutableStateOf("all")
@@ -180,6 +196,14 @@ class AppState(
         // Redecorate feed/search whenever narration availability changes (e.g. after YouTube sync).
         viewModelScope.launch { repo.availability.collect { redecorate() } }
         viewModelScope.launch { episodes = repo.episodes(); redecorate() }
+        viewModelScope.launch { friends.serverUrlFlow.collect { serverUrl = it } }
+        // Register this device (anonymous token) in the background so the friend code is ready,
+        // then pull recommendations for the Home card.
+        viewModelScope.launch {
+            friendCode = friends.cachedFriendCode()
+            runCatching { friends.ensureRegistered() }.onSuccess { friendCode = it }
+            refreshRecommendationsForHome()
+        }
         // Load persisted settings first, then kick off the feed/hero, then persist future changes.
         viewModelScope.launch {
             applySettings(settingsStore.settings.first())
@@ -586,10 +610,105 @@ class AppState(
         if (i > 0) playWithResume(list[i - 1])
     }
 
+    // ---- friends / recommendations ----
+    /** Load friends + incoming recommendations together; also (re)registers to backfill the code. */
+    fun loadFriends() {
+        friendsLoading = true; friendsError = null
+        viewModelScope.launch {
+            if (friendCode == null) runCatching { friends.ensureRegistered() }.onSuccess { friendCode = it }
+            // friends + recommendations are independent — fetch them concurrently.
+            runCatching {
+                val friendsDef = async { friends.friends() }
+                val recsDef = async { friends.recommendations() }
+                friendsList = friendsDef.await()
+                recommendations = recsDef.await()
+                // Opening the Friends tab counts as seeing them — stop the poller re-notifying.
+                recommendations.maxOfOrNull { it.id }?.let { friends.setLastSeenRecId(it.toLong()) }
+            }.onFailure { friendsError = it.message ?: "Couldn't reach the server" }
+            friendsLoading = false
+        }
+    }
+
+    fun addFriend() {
+        val code = addFriendInput.trim()
+        if (code.length != 6) { postFriendsNotice("Enter a 6-character code"); return }
+        viewModelScope.launch {
+            runCatching { friends.addFriend(code) }
+                .onSuccess { added ->
+                    addFriendInput = ""
+                    postFriendsNotice("Added ${added.name.ifBlank { added.friend_code }}")
+                    // add_friend.php returns the new friend, so append locally instead of a second
+                    // round-trip to re-fetch the whole list (dedup in case they were already added).
+                    if (friendsList.none { it.friend_code == added.friend_code }) {
+                        friendsList = (friendsList + added).sortedBy { it.name.ifBlank { it.friend_code } }
+                    }
+                }
+                .onFailure { postFriendsNotice(it.message ?: "Couldn't add friend") }
+        }
+    }
+
+    /** Quietly refresh recommendations for the Home card (no loading/error UI, no seen-marking). */
+    fun refreshRecommendationsForHome() {
+        viewModelScope.launch { runCatching { recommendations = friends.recommendations() } }
+    }
+
+    fun removeFriend(code: String) {
+        viewModelScope.launch {
+            runCatching { friends.removeFriend(code) }
+                .onSuccess {
+                    friendsList = friendsList.filterNot { it.friend_code == code }
+                    // Their recommendations are deleted server-side too — drop them locally to match.
+                    recommendations = recommendations.filterNot { it.from_code == code }
+                    postFriendsNotice("Removed")
+                }
+                .onFailure { postFriendsNotice(it.message ?: "Couldn't remove friend") }
+        }
+    }
+
+    fun updateServerUrl(url: String) { serverUrl = url }
+    fun saveServerUrl() { viewModelScope.launch { friends.setServerUrl(serverUrl); loadFriends() } }
+
+    /** Open a recommended SCP in the reader from its stored url/number/title. */
+    fun openRecommendation(rec: com.foundation.scpreader.network.FriendsApi.Rec) {
+        openReaderItem(
+            ScpItem(
+                url = rec.scp_url, number = rec.scp_number.ifBlank { rec.scp_title },
+                title = rec.scp_title.ifBlank { rec.scp_number }, objectClass = "Unknown",
+                typeLabel = "SCP", tags = emptyList(),
+            )
+        )
+    }
+
+    // Reader → "Recommend to friend" flow.
+    fun openRecommendSheet() {
+        recommendNote = ""; recommendSheetOpen = true; readerMenuOpen = false
+        if (friendsList.isEmpty()) loadFriends()
+    }
+    fun closeRecommendSheet() { recommendSheetOpen = false }
+
+    fun sendRecommendation(friendCode: String) {
+        val item = readerItem ?: return
+        val note = recommendNote.trim()
+        recommendSheetOpen = false
+        viewModelScope.launch {
+            runCatching { friends.recommend(friendCode, item, note) }
+                .onSuccess { postFriendsNotice("Recommendation sent") }
+                .onFailure { postFriendsNotice(it.message ?: "Couldn't send") }
+        }
+    }
+
+    private fun postFriendsNotice(message: String) {
+        friendsNotice = message
+        friendsNoticeJob?.cancel()
+        friendsNoticeJob = viewModelScope.launch { kotlinx.coroutines.delay(2600); friendsNotice = null }
+    }
+
     // ---- misc reducers ----
     fun go(s: Screen) {
         screen = s; readerItem = null; randomOpen = false
         if (s == Screen.Home && feedRaw.isEmpty() && !feedLoading) loadFeed()
+        if (s == Screen.Home) refreshRecommendationsForHome()
+        if (s == Screen.Friends) loadFriends()
     }
     fun goSearch() { screen = Screen.Search }
     fun togglePauseAll() { downloadsPaused = !downloadsPaused; repo.setPaused(downloadsPaused) }
@@ -639,7 +758,7 @@ class AppState(
         fun factory(container: AppContainer): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T =
-                AppState(container.repository, container.player, container.settingsStore, container.updateManager, container::isOnline) as T
+                AppState(container.repository, container.player, container.settingsStore, container.updateManager, container.friendsRepository, container::isOnline) as T
         }
     }
 }

@@ -94,6 +94,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         handleDeepLink(intent)
         handleOpenPlayer(intent)
+        handleOpenFriends(intent)
         // Android 13+ hides the narration player's notification unless this is granted.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -124,6 +125,12 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         handleDeepLink(intent)
         handleOpenPlayer(intent)
+        handleOpenFriends(intent)
+    }
+
+    // Recommendation-notification tap: jump straight to the Friends tab.
+    private fun handleOpenFriends(intent: Intent?) {
+        if (intent?.action == ACTION_OPEN_FRIENDS) app.go(Screen.Friends)
     }
 
     private fun handleDeepLink(intent: Intent?) {
@@ -138,6 +145,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val ACTION_OPEN_PLAYER = "com.foundation.scpreader.OPEN_PLAYER"
+        const val ACTION_OPEN_FRIENDS = "com.foundation.scpreader.OPEN_FRIENDS"
     }
 }
 
@@ -149,6 +157,7 @@ private val navDefs = listOf(
     NavDef(Screen.Search, AppIcons.Search, AppIcons.SearchOutlined, "Search"),
     NavDef(Screen.Library, AppIcons.LibraryBooks, AppIcons.LibraryBooksOutlined, "Library"),
     NavDef(Screen.Downloads, AppIcons.DownloadForOffline, AppIcons.DownloadForOfflineOutlined, "Downloads"),
+    NavDef(Screen.Friends, AppIcons.Group, AppIcons.GroupOutlined, "Friends"),
 )
 
 @Composable
@@ -184,6 +193,7 @@ private fun AppRoot(app: AppState) {
                         Screen.Search -> SearchScreen(app)
                         Screen.Library -> LibraryScreen(app)
                         Screen.Downloads -> DownloadsScreen(app)
+                        Screen.Friends -> com.foundation.scpreader.ui.screens.FriendsScreen(app)
                         Screen.Settings -> SettingsScreen(app)
                     }
                 }
@@ -199,6 +209,7 @@ private fun AppRoot(app: AppState) {
 
         app.readerItem?.let { item -> ReaderScreen(app, item) }
         if (app.randomOpen) RandomSheet(app)
+        if (app.recommendSheetOpen) com.foundation.scpreader.ui.screens.RecommendSheet(app)
         if (app.playerFullScreen) com.foundation.scpreader.ui.screens.PlayerScreen(app)
 
         // Cold-start access screen: stays until the app is actually ready (not a fixed timer),

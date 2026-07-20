@@ -71,6 +71,12 @@ import androidx.compose.material.icons.outlined.Downloading
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryBooks
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.PersonAdd
 
 /** Central mapping of the mockup's Material Symbols to Compose ImageVectors. */
 object AppIcons {
@@ -147,4 +153,10 @@ object AppIcons {
     val LibraryBooksOutlined = Icons.Outlined.LibraryBooks
     val DownloadForOffline = Icons.Filled.DownloadForOffline
     val DownloadForOfflineOutlined = Icons.Outlined.DownloadForOffline
+    val Group = Icons.Filled.Group
+    val GroupOutlined = Icons.Outlined.Group
+    val ContentCopy = Icons.Filled.ContentCopy
+    val Share = Icons.Filled.Share
+    val Send = Icons.AutoMirrored.Filled.Send
+    val PersonAdd = Icons.Filled.PersonAdd
 }

@@ -205,6 +205,29 @@ private fun HeroSlot(app: AppState) {
         HeroMode.ScpOfTheDay -> "SCP OF THE DAY" to AppIcons.Casino
         HeroMode.Trending -> "TRENDING" to AppIcons.Bolt
         HeroMode.RecentlyViewed -> "RECENTLY VIEWED" to AppIcons.History
+        HeroMode.FriendRecommendation -> "FRIEND RECOMMENDATION" to AppIcons.Group
+    }
+
+    if (app.heroMode == HeroMode.FriendRecommendation) {
+        HeroHeader(label, icon)
+        val rec = app.recommendations.firstOrNull()
+        if (rec == null) {
+            HeroPlaceholder("When a friend recommends an SCP it shows up here. Share your friend code from the Friends tab.")
+        } else {
+            Column(
+                Modifier.padding(horizontal = 16.dp).padding(bottom = 18.dp).fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp)).background(c.primaryContainer)
+                    .clickable { app.openRecommendation(rec) }.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 16.dp),
+            ) {
+                Text("FROM ${(rec.from_name.ifBlank { rec.from_code }).uppercase()}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp, color = c.onPrimaryContainer)
+                Text(rec.scp_number.ifBlank { rec.scp_title }, fontFamily = Mono, fontSize = 13.sp, color = c.onPrimaryContainer, modifier = Modifier.padding(top = 8.dp))
+                Text(rec.scp_title.ifBlank { rec.scp_number }, fontSize = 22.sp, fontWeight = FontWeight.Medium, color = c.onPrimaryContainer, lineHeight = 25.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                if (rec.note.isNotBlank()) {
+                    Text("“${rec.note}”", fontSize = 14.sp, color = c.onPrimaryContainer.copy(alpha = 0.85f), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        }
+        return
     }
 
     if (app.heroMode == HeroMode.RecentlyViewed) {
