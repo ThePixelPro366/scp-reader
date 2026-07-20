@@ -243,7 +243,7 @@ private fun HeroSlot(app: AppState) {
                             .clickable { app.openReaderItem(item) }.padding(16.dp),
                     ) {
                         Text(item.number, fontFamily = Mono, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.onPrimaryContainer)
-                        Text(item.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = c.onPrimaryContainer, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                        Text(item.displayTitle, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = c.onPrimaryContainer, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                         Text(item.objectClass, fontSize = 12.sp, color = c.onPrimaryContainer.copy(alpha = 0.85f), modifier = Modifier.padding(top = 8.dp))
                     }
                 }
@@ -279,7 +279,7 @@ private fun HeroSlot(app: AppState) {
                     .clickable { app.openReaderItem(item) }.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 16.dp),
             ) {
                 Text(item.number, fontFamily = Mono, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.onPrimaryContainer)
-                Text(item.title, fontSize = 22.sp, fontWeight = FontWeight.Medium, color = c.onPrimaryContainer, lineHeight = 25.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(item.displayTitle, fontSize = 22.sp, fontWeight = FontWeight.Medium, color = c.onPrimaryContainer, lineHeight = 25.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 val frac = if (app.heroMode == HeroMode.ContinueReading) (app.recentProgress[item.url] ?: 0f) else 0f
                 if (frac > 0.01f) {
                     // Reading-progress bar (persisted scroll fraction) — resumes where you left off.
@@ -512,7 +512,7 @@ private fun FeedCard(app: AppState, item: ScpItem) {
                 if (item.podcast) Icon(AppIcons.Headphones, null, Modifier.size(20.dp), tint = c.primary)
                 if (item.downloaded) Icon(AppIcons.DownloadDone, null, Modifier.size(20.dp), tint = c.primary)
             }
-            Text(item.title, fontSize = 19.sp, fontWeight = FontWeight.Medium, color = c.onSurface, lineHeight = 23.sp, modifier = Modifier.padding(top = 10.dp))
+            Text(item.displayTitle, fontSize = 19.sp, fontWeight = FontWeight.Medium, color = c.onSurface, lineHeight = 23.sp, modifier = Modifier.padding(top = 10.dp))
             if (item.excerpt.isNotEmpty()) {
                 Text(item.excerpt, fontSize = 14.sp, color = c.onSurfaceVariant, lineHeight = 20.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 7.dp))
             }

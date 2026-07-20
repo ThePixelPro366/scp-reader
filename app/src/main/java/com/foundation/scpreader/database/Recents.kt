@@ -25,6 +25,7 @@ data class RecentEntity(
     val scroll: Int,        // last vertical scroll offset in px (exact resume position)
     val progress: Float = 0f, // 0f‥1f reading fraction (scroll / content height), for the Continue-reading bar
     val updatedAt: Long,
+    val altTitle: String? = null, // descriptive listing name (added in v8); null for old rows
 )
 
 @Dao

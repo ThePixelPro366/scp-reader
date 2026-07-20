@@ -207,7 +207,7 @@ fun RecommendSheet(app: AppState) {
 
             Text("Recommend to a friend", fontSize = 22.sp, fontWeight = FontWeight.Medium, color = c.onSurface)
             app.readerItem?.let {
-                Text(it.number + " · " + it.title, fontSize = 13.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, bottom = 16.dp))
+                Text(it.number + " · " + it.displayTitle, fontSize = 13.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, bottom = 16.dp))
             }
 
             // optional note

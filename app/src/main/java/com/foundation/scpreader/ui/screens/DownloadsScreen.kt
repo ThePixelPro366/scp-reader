@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foundation.scpreader.AppState
 import com.foundation.scpreader.data.toScpItem
+import com.foundation.scpreader.database.displayTitle
 import com.foundation.scpreader.database.DlStatus
 import com.foundation.scpreader.database.DownloadEntity
 import com.foundation.scpreader.ui.components.AppIcons
@@ -132,7 +133,7 @@ private fun ActiveCard(d: DownloadEntity, app: AppState) {
             QueueBadge(d.objectClass, app.isDark)
             Column(Modifier.weight(1f)) {
                 Text(d.number, fontFamily = Mono, fontSize = 11.sp, color = c.primary)
-                Text(d.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(d.displayTitle, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Text("${d.progress}%", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.onSurfaceVariant)
             Box(Modifier.size(22.dp).clickable { app.cancelDownload(d.url) }, contentAlignment = Alignment.Center) {

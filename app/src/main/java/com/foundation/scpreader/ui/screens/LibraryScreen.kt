@@ -157,7 +157,7 @@ fun LibraryScreen(app: AppState) {
                     ) {
                         Icon(if (row.audio) AppIcons.Headphones else AppIcons.Article, null, Modifier.size(22.dp), tint = c.onSurfaceVariant)
                         Column(Modifier.weight(1f)) {
-                            Text(row.item.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = c.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(row.item.displayTitle, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = c.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(row.item.number + " · " + row.item.objectClass, fontSize = 13.sp, color = c.onSurfaceVariant)
                         }
                         if (row.bookmarked) Icon(AppIcons.Bookmark, null, Modifier.size(18.dp), tint = c.primary)

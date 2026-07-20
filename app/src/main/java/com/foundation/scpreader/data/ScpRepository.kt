@@ -60,6 +60,13 @@ class ScpRepository(
     fun setWifiOnly(enabled: Boolean) { wifiOnly = enabled }
     fun setPaused(value: Boolean) { paused = value }
 
+    // Regional/language branches the random & of-the-day discovery draws from (settings-driven).
+    // Always non-empty; defaults to the English main branch.
+    // Kept in settings-list (enum) order so the main branch (EN) leads and search/discovery
+    // priority follows how the branches are listed in Settings.
+    @Volatile private var branches: List<Branch> = listOf(Branch.EN)
+    fun setBranches(list: List<Branch>) { branches = list.ifEmpty { listOf(Branch.EN) }.sortedBy { it.ordinal } }
+
     /** Set by AppState to surface background audio-download stage failures as a transient notice. */
     var onDownloadNotice: ((String) -> Unit)? = null
     private val json = Json { ignoreUnknownKeys = true; classDiscriminator = "t" }
@@ -97,10 +104,11 @@ class ScpRepository(
         // Token search first (exact numbers, titles, words), then number-prefix matches so a
         // partial number like "scp 0" or "17" narrows the archive by rating instead of returning
         // nothing. Merge keeps the more-relevant token/exact hits ahead of prefix results.
+        val hosts = branches.map { it.host }
         val merged = LinkedHashMap<String, ScpItem>()
-        crom.search(query).forEach { merged[it.url] = it }
+        crom.search(query, hosts).forEach { merged[it.url] = it }
         Regex("\\d+").find(query)?.value?.let { digits ->
-            crom.searchByNumberPrefix(digits).forEach { merged.putIfAbsent(it.url, it) }
+            crom.searchByNumberPrefix(digits, hosts = hosts).forEach { merged.putIfAbsent(it.url, it) }
         }
         val results = merged.values.toList()
         recordTags(results)
@@ -126,6 +134,32 @@ class ScpRepository(
             ScpItem(url = url, number = num, title = text.ifBlank { num }, objectClass = "Unknown", typeLabel = "SCP", tags = emptyList())
         }
         return Article(decorate(listOf(resolved)).first(), blocks, crosslinks)
+    }
+
+    /**
+     * A translation of [item] that lives in one of the user's selected branches (other than the
+     * article's own branch), or null when none is selected/available. Powers the reader's
+     * "translation available" prompt. Prefers branches in the user's selected order.
+     */
+    suspend fun translationInSelectedBranches(item: ScpItem): TranslationSuggestion? {
+        val current = Branch.ofUrl(item.url)
+        val wanted = branches.filter { it != current }
+        if (wanted.isEmpty()) return null
+        val links = runCatching { crom.translations(item.url) }.getOrNull().orEmpty()
+        if (links.isEmpty()) return null
+        for (branch in wanted) {
+            val link = links.firstOrNull { Branch.ofUrl(it.url) == branch } ?: continue
+            val slug = link.url.substringAfterLast('/')
+            val number = if (slug.matches(Regex("scp-\\d+.*"))) "SCP-" + slug.removePrefix("scp-").uppercase() else slug.uppercase()
+            return TranslationSuggestion(
+                branch = branch,
+                item = ScpItem(
+                    url = link.url, number = number, title = link.title,
+                    objectClass = "Unknown", typeLabel = "SCP", tags = emptyList(),
+                ),
+            )
+        }
+        return null
     }
 
     private fun failureBlocks(): List<ContentBlock> =
@@ -186,7 +220,7 @@ class ScpRepository(
                 url = item.url, number = item.number, title = item.title, objectClass = item.objectClass,
                 typeLabel = item.typeLabel, tagsCsv = item.tags.joinToString(","), rating = item.rating,
                 imageUrl = item.imageUrl, blocksJson = null, audioPath = null, hasAudio = withAudio,
-                sizeBytes = 0, status = DlStatus.QUEUED, progress = 0, updatedAt = now(),
+                sizeBytes = 0, status = DlStatus.QUEUED, progress = 0, updatedAt = now(), altTitle = item.altTitle,
             )
         )
         workChannel.send(DownloadJob(item.url, withAudio, categories))
@@ -232,6 +266,7 @@ class ScpRepository(
                 url = item.url, number = item.number, title = item.title, objectClass = item.objectClass,
                 typeLabel = item.typeLabel, tagsCsv = item.tags.joinToString(","), rating = item.rating,
                 imageUrl = item.imageUrl, scroll = prev?.scroll ?: 0, progress = prev?.progress ?: 0f, updatedAt = now(),
+                altTitle = item.altTitle,
             )
         )
     }
@@ -247,7 +282,7 @@ class ScpRepository(
             SearchRecentEntity(
                 url = item.url, number = item.number, title = item.title, objectClass = item.objectClass,
                 typeLabel = item.typeLabel, tagsCsv = item.tags.joinToString(","), rating = item.rating,
-                imageUrl = item.imageUrl, updatedAt = now(),
+                imageUrl = item.imageUrl, updatedAt = now(), altTitle = item.altTitle,
             )
         )
     }
@@ -264,7 +299,7 @@ class ScpRepository(
             BookmarkEntity(
                 url = item.url, number = item.number, title = item.title, objectClass = item.objectClass,
                 typeLabel = item.typeLabel, tagsCsv = item.tags.joinToString(","), rating = item.rating,
-                imageUrl = item.imageUrl, addedAt = now(),
+                imageUrl = item.imageUrl, addedAt = now(), altTitle = item.altTitle,
             )
         )
         if (autoDownload) enqueueNow(item, withAudio)
@@ -272,8 +307,10 @@ class ScpRepository(
     }
 
     private fun slugFor(n: Int) = if (n < 1000) "scp-%03d".format(n) else "scp-$n"
-    private suspend fun fetchNumber(n: Int): ScpItem? =
-        runCatching { crom.detail("http://scp-wiki.wikidot.com/${slugFor(n)}") }.getOrNull()?.let { (item, source) ->
+    /** Pick a branch for a discovery pick; distributes numbers across the selected branches. */
+    private fun branchFor(n: Int): Branch = branches[Math.floorMod(n, branches.size)]
+    private suspend fun fetchNumber(n: Int, branch: Branch = branchFor(n)): ScpItem? =
+        runCatching { crom.detail("${branch.host}/${slugFor(n)}") }.getOrNull()?.let { (item, source) ->
             // CROM gives us title/rating/tags but no summary. Derive a short description from the
             // page's raw wikidot source (already fetched here) so feed cards read like the mockup.
             if (item.excerpt.isNotEmpty()) item else item.copy(excerpt = excerptFromSource(source))
@@ -609,7 +646,7 @@ class ScpRepository(
     private fun slug(url: String) = url.substringAfterLast('/').ifBlank { url.hashCode().toString() }
 
     private fun DownloadEntity.toItem() = ScpItem(
-        url = url, number = number, title = title, objectClass = objectClass, typeLabel = typeLabel,
+        url = url, number = number, title = title, altTitle = altTitle, objectClass = objectClass, typeLabel = typeLabel,
         tags = tagsCsv.split(",").filter { it.isNotBlank() }, rating = rating, imageUrl = imageUrl,
         downloaded = status == DlStatus.DONE, hasImage = imageUrl != null,
     )
@@ -617,25 +654,25 @@ class ScpRepository(
 
 /** Maps a stored search-recent row to a list item. */
 fun SearchRecentEntity.toScpItem() = ScpItem(
-    url = url, number = number, title = title, objectClass = objectClass, typeLabel = typeLabel,
+    url = url, number = number, title = title, altTitle = altTitle, objectClass = objectClass, typeLabel = typeLabel,
     tags = tagsCsv.split(",").filter { it.isNotBlank() }, rating = rating, imageUrl = imageUrl, hasImage = imageUrl != null,
 )
 
 /** Maps a stored recently-viewed row to a list item. */
 fun RecentEntity.toScpItem() = ScpItem(
-    url = url, number = number, title = title, objectClass = objectClass, typeLabel = typeLabel,
+    url = url, number = number, title = title, altTitle = altTitle, objectClass = objectClass, typeLabel = typeLabel,
     tags = tagsCsv.split(",").filter { it.isNotBlank() }, rating = rating, imageUrl = imageUrl, hasImage = imageUrl != null,
 )
 
 /** Maps a stored bookmark row to a list item. */
 fun BookmarkEntity.toScpItem() = ScpItem(
-    url = url, number = number, title = title, objectClass = objectClass, typeLabel = typeLabel,
+    url = url, number = number, title = title, altTitle = altTitle, objectClass = objectClass, typeLabel = typeLabel,
     tags = tagsCsv.split(",").filter { it.isNotBlank() }, rating = rating, imageUrl = imageUrl, hasImage = imageUrl != null,
 )
 
 /** Maps a stored download row to the list-item shape used by Library/Downloads UIs. */
 fun DownloadEntity.toScpItem(podcast: Boolean = false) = ScpItem(
-    url = url, number = number, title = title, objectClass = objectClass, typeLabel = typeLabel,
+    url = url, number = number, title = title, altTitle = altTitle, objectClass = objectClass, typeLabel = typeLabel,
     tags = tagsCsv.split(",").filter { it.isNotBlank() }, rating = rating, imageUrl = imageUrl,
     downloaded = status == DlStatus.DONE, hasImage = imageUrl != null, podcast = podcast || hasAudio,
 )

@@ -183,7 +183,27 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
                         modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(8.dp)).background(classBg).padding(horizontal = 11.dp, vertical = 5.dp),
                     )
                     Text(item.number, fontFamily = Mono, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.primary, modifier = Modifier.padding(top = 18.dp))
-                    Text(item.title, fontSize = 30.sp, fontWeight = FontWeight.Medium, color = c.onSurface, lineHeight = 34.sp, modifier = Modifier.padding(top = 4.dp))
+                    Text(item.displayTitle, fontSize = 30.sp, fontWeight = FontWeight.Medium, color = c.onSurface, lineHeight = 34.sp, modifier = Modifier.padding(top = 4.dp))
+
+                    app.translationSuggestion?.let { suggestion ->
+                        Row(
+                            Modifier.padding(top = 18.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                                .background(c.secondaryContainer).padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Icon(AppIcons.Public, null, Modifier.size(22.dp), tint = c.onSecondaryContainer)
+                            Column(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable { app.openTranslation() }) {
+                                Text("Translation available", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.onSecondaryContainer)
+                                Text("Read this in ${suggestion.branch.displayName}", fontSize = 12.sp, color = c.onSecondaryContainer.copy(alpha = 0.85f))
+                            }
+                            Box(Modifier.size(36.dp).clip(CircleShape).clickable { app.openTranslation() }, contentAlignment = Alignment.Center) {
+                                Icon(AppIcons.NorthEast, "Open translation", Modifier.size(20.dp), tint = c.onSecondaryContainer)
+                            }
+                            Box(Modifier.size(36.dp).clip(CircleShape).clickable { app.dismissTranslation() }, contentAlignment = Alignment.Center) {
+                                Icon(AppIcons.Close, "Dismiss", Modifier.size(18.dp), tint = c.onSecondaryContainer)
+                            }
+                        }
+                    }
 
                     if (episode != null) {
                         Row(
@@ -561,7 +581,7 @@ private fun RelatedRow(app: AppState, r: ScpItem) {
             modifier = Modifier.clip(RoundedCornerShape(7.dp)).background(bg).padding(horizontal = 8.dp, vertical = 4.dp))
         Column(Modifier.weight(1f)) {
             Text(r.number, fontFamily = Mono, fontSize = 12.sp, color = c.primary)
-            Text(r.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(r.displayTitle, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Icon(AppIcons.NorthEast, null, Modifier.size(20.dp), tint = c.onSurfaceVariant)
     }

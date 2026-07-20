@@ -23,6 +23,7 @@ data class SearchRecentEntity(
     val rating: Int,
     val imageUrl: String?,
     val updatedAt: Long,
+    val altTitle: String? = null, // descriptive listing name (added in v8); null for old rows
 )
 
 @Dao

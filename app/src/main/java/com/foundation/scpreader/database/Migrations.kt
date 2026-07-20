@@ -56,3 +56,17 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         db.execSQL("ALTER TABLE `recents` ADD COLUMN `progress` REAL NOT NULL DEFAULT 0")
     }
 }
+
+/**
+ * v7 -> v8: add the descriptive listing name (`altTitle`) to every stored-article table, so the
+ * Library/Downloads/Recents lists can show the SCP's real name as the primary label the same way
+ * the live feed and search do. Nullable — old rows fall back to the wikidot title.
+ */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `downloads` ADD COLUMN `altTitle` TEXT")
+        db.execSQL("ALTER TABLE `bookmarks` ADD COLUMN `altTitle` TEXT")
+        db.execSQL("ALTER TABLE `recents` ADD COLUMN `altTitle` TEXT")
+        db.execSQL("ALTER TABLE `search_recents` ADD COLUMN `altTitle` TEXT")
+    }
+}

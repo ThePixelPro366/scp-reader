@@ -27,6 +27,8 @@ data class Settings(
     val excludedClasses: Set<String> = emptySet(),
     val heroMode: HeroMode = HeroMode.ContinueReading,
     val sponsorCategories: Set<String> = com.foundation.scpreader.playback.SponsorCategory.DEFAULT_ENABLED,
+    /** Regional/language branches (by [Branch.code]) that feed the random/of-the-day discovery. */
+    val selectedBranches: Set<String> = setOf(Branch.EN.code),
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -45,6 +47,7 @@ class SettingsStore(private val context: Context) {
         val excluded = stringSetPreferencesKey("excluded_classes")
         val hero = stringPreferencesKey("hero_mode")
         val sponsorCats = stringSetPreferencesKey("sponsor_categories")
+        val branches = stringSetPreferencesKey("selected_branches")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { p ->
@@ -60,6 +63,7 @@ class SettingsStore(private val context: Context) {
             excludedClasses = p[Keys.excluded] ?: emptySet(),
             heroMode = p[Keys.hero]?.let { runCatching { HeroMode.valueOf(it) }.getOrNull() } ?: HeroMode.ContinueReading,
             sponsorCategories = p[Keys.sponsorCats] ?: com.foundation.scpreader.playback.SponsorCategory.DEFAULT_ENABLED,
+            selectedBranches = p[Keys.branches] ?: setOf(Branch.EN.code),
         )
     }
 
@@ -76,6 +80,7 @@ class SettingsStore(private val context: Context) {
             p[Keys.excluded] = s.excludedClasses
             p[Keys.hero] = s.heroMode.name
             p[Keys.sponsorCats] = s.sponsorCategories
+            p[Keys.branches] = s.selectedBranches
         }
     }
 }

@@ -36,7 +36,7 @@ class AppContainer(context: Context) {
     val streamResolver = com.foundation.scpreader.playback.StreamResolver()
 
     private val db = Room.databaseBuilder(context, AppDatabase::class.java, "scp-reader.db")
-        .addMigrations(com.foundation.scpreader.database.MIGRATION_5_6, com.foundation.scpreader.database.MIGRATION_6_7)
+        .addMigrations(com.foundation.scpreader.database.MIGRATION_5_6, com.foundation.scpreader.database.MIGRATION_6_7, com.foundation.scpreader.database.MIGRATION_7_8)
         // 5->6 is preserved above; any older/unknown schema (pre-v5 dev builds) has no
         // hand-written path, so rebuild rather than crash on open.
         .fallbackToDestructiveMigration()

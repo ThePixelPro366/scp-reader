@@ -192,7 +192,10 @@ class ScpScraper {
         // file on scp-wiki.wdfiles.com/local--files/scp-XXXX/..., where XXXX is just the asset's
         // storage directory (often reused/shared) and unrelated to any article the page mentions.
         val selfSlug = url.substringAfterLast('/').lowercase()
-        val pageLinkRegex = Regex("^scp-wiki\\.wikidot\\.com/(scp-\\d+[a-z0-9-]*)/?$", RegexOption.IGNORE_CASE)
+        // Resolve crosslinks within the SAME branch wiki the article came from, so links on a
+        // non-EN page point back into that branch rather than the English wiki.
+        val branchHost = url.substringAfter("://").substringBefore('/').lowercase()
+        val pageLinkRegex = Regex("^${Regex.escape(branchHost)}/(scp-\\d+[a-z0-9-]*)/?$", RegexOption.IGNORE_CASE)
         val crosslinks = LinkedHashMap<String, String>()
         for (a in content.select("a[href]")) {
             val href = a.absUrl("href").ifBlank { a.attr("href") }
@@ -204,7 +207,7 @@ class ScpScraper {
             crosslinks[slug] = text
             if (crosslinks.size >= 8) break
         }
-        val links = crosslinks.map { (slug, text) -> "http://scp-wiki.wikidot.com/$slug" to text }
+        val links = crosslinks.map { (slug, text) -> "http://$branchHost/$slug" to text }
         Scraped(blocks, objectClass, excerpt, firstImage, links)
     }
 

@@ -115,7 +115,7 @@ fun SearchScreen(app: AppState) {
                             Icon(AppIcons.NorthWest, null, Modifier.size(20.dp), tint = c.onSurfaceVariant)
                             Column(Modifier.weight(1f)) {
                                 Text(sug.number, fontFamily = Mono, fontSize = 12.sp, color = c.primary)
-                                Text(sug.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(sug.displayTitle, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             val (bg, txt) = classColors(sug.objectClass, app.isDark)
                             Text(sug.objectClass.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = txt,
@@ -349,7 +349,7 @@ private fun ResultRow(app: AppState, item: ScpItem) {
         }
         Column(Modifier.weight(1f)) {
             Text(item.number, fontFamily = Mono, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = c.primary)
-            Text(item.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = c.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(item.displayTitle, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = c.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(item.metaLine, fontSize = 13.sp, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (item.podcast) Icon(AppIcons.Headphones, null, Modifier.size(20.dp), tint = c.primary)

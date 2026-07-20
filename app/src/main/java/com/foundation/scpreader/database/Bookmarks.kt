@@ -20,6 +20,7 @@ data class BookmarkEntity(
     val rating: Int,
     val imageUrl: String?,
     val addedAt: Long,
+    val altTitle: String? = null, // descriptive listing name (added in v8); null for old rows
 )
 
 @Dao

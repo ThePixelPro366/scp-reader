@@ -191,6 +191,28 @@ fun SettingsScreen(app: AppState) {
             }
         }
 
+        // ---- Content branches ----
+        GroupLabel("Content branches")
+        SettingsCard {
+            Text("Language divisions", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 4.dp))
+            Text("Random entries & SCP of the Day are drawn from these regional wikis. Opening an article that's translated into one of them offers a switch.", fontSize = 13.sp, lineHeight = 18.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 10.dp))
+            FlowRow(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.foundation.scpreader.data.Branch.entries.forEach { branch ->
+                    val on = app.selectedBranches.contains(branch.code)
+                    Row(
+                        Modifier.height(36.dp).clip(RoundedCornerShape(10.dp))
+                            .background(if (on) c.primary else Color.Transparent)
+                            .then(if (on) Modifier else Modifier.border(1.dp, c.outlineVariant, RoundedCornerShape(10.dp)))
+                            .clickable { app.toggleBranch(branch.code) }.padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        if (on) Icon(AppIcons.Check, null, Modifier.size(15.dp), tint = c.onPrimary)
+                        Text(branch.displayName, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (on) c.onPrimary else c.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+
         // ---- Reading ----
         GroupLabel("Reading")
         SettingsCard {

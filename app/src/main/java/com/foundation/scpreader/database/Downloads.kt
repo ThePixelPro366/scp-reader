@@ -44,7 +44,12 @@ data class DownloadEntity(
     val source: String? = null,              // "YOUTUBE" | "PODCAST"
     val videoId: String? = null,             // YouTube video id when applicable
     val sponsorSegmentsJson: String? = null, // SponsorBlock segments captured at download time
+    val altTitle: String? = null,            // descriptive listing name (added in v8); null for old rows
 )
+
+/** Primary list label: the descriptive listing name when present, else the wikidot title. */
+val DownloadEntity.displayTitle: String
+    get() = altTitle?.takeIf { it.isNotBlank() && it != title } ?: title
 
 @Dao
 interface DownloadDao {
@@ -72,7 +77,7 @@ interface DownloadDao {
         DownloadEntity::class, BookmarkEntity::class, RecentEntity::class, SearchRecentEntity::class,
         PlaybackPositionEntity::class, SponsorSegmentEntity::class, NarrationIndexEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

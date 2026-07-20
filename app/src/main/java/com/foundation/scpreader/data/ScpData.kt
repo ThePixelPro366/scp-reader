@@ -10,7 +10,8 @@ import kotlinx.serialization.Serializable
 data class ScpItem(
     val url: String,                 // canonical wikidot URL — stable unique id
     val number: String,              // display id, e.g. "SCP-173" or "TALE" / "GoI"
-    val title: String,
+    val title: String,               // wikidot page title (for SCPs this is usually just the number)
+    val altTitle: String? = null,    // descriptive listing name (CROM alternateTitles), e.g. "The Sculpture"
     val objectClass: String,         // Safe | Euclid | Keter | Thaumiel | Neutralized | Unknown | ...
     val typeLabel: String,           // "SCP" | "Tale" | "GoI"
     val tags: List<String>,
@@ -22,6 +23,13 @@ data class ScpItem(
     val podcast: Boolean = false,    // derived: a matching narration episode exists
     val downloaded: Boolean = false, // derived from the local downloads table
 ) {
+    /**
+     * The primary label for lists and the reader header: the descriptive listing name when CROM
+     * has one, otherwise the wikidot title. For SCP articles this surfaces "The Sculpture" instead
+     * of the bare "SCP-173" (which stays as the small [number]).
+     */
+    val displayTitle: String get() = altTitle?.takeIf { it.isNotBlank() && it != title } ?: title
+
     val classShort: String get() = if (objectClass == "Unknown") typeLabel else objectClass
     val metaLine: String
         get() = typeLabel + " · " + objectClass + if (tags.isNotEmpty()) " · " + contentTags.take(2).joinToString(", ") else ""
@@ -86,6 +94,9 @@ data class Article(
     val blocks: List<ContentBlock>,
     val crosslinks: List<ScpItem> = emptyList(),
 )
+
+/** A same-article counterpart in another [Branch], surfaced by the reader's translation prompt. */
+data class TranslationSuggestion(val branch: Branch, val item: ScpItem)
 
 /** Where a narration comes from. YouTube (@scparchives) is primary; the Apple feed is fallback. */
 enum class NarrationSource { YOUTUBE, PODCAST }

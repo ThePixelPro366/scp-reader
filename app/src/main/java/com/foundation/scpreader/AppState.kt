@@ -112,6 +112,8 @@ class AppState(
 
     var heroMode by mutableStateOf(HeroMode.ContinueReading)
     var excludedClasses by mutableStateOf(setOf<String>())
+    /** Selected regional/language branches (by code) that feed random discovery & of-the-day. */
+    var selectedBranches by mutableStateOf(setOf(com.foundation.scpreader.data.Branch.EN.code))
 
     var downloadsPaused by mutableStateOf(false)
     var readerMenuOpen by mutableStateOf(false)
@@ -153,6 +155,10 @@ class AppState(
 
     var article by mutableStateOf<Article?>(null); private set
     var articleLoading by mutableStateOf(false); private set
+    /** A translation of the open article in a selected branch, offered as a reader prompt; null = none. */
+    var translationSuggestion by mutableStateOf<com.foundation.scpreader.data.TranslationSuggestion?>(null); private set
+    /** Urls the translation prompt was already dismissed for, so it doesn't reappear this session. */
+    private val translationDismissed = mutableSetOf<String>()
 
     var episodes by mutableStateOf<List<Episode>>(emptyList()); private set
     var heroRefreshing by mutableStateOf(false); private set
@@ -220,13 +226,31 @@ class AppState(
         downloadPref = s.downloadPref; autoDownloadBookmarks = s.autoDownloadBookmarks
         excludedClasses = s.excludedClasses; heroMode = s.heroMode
         sponsorCategories = s.sponsorCategories
+        selectedBranches = s.selectedBranches
         repo.setWifiOnly(s.wifiOnly)
+        repo.setBranches(com.foundation.scpreader.data.Branch.fromCodes(s.selectedBranches))
     }
 
     private fun currentSettings() = Settings(
         themeMode, dynamicColor, seed, fontScale, loadImages, wifiOnly,
         downloadPref, autoDownloadBookmarks, excludedClasses, heroMode, sponsorCategories,
+        selectedBranches,
     )
+
+    /**
+     * Toggle a branch in the discovery set. English can't be removed to empty — at least one branch
+     * must remain, so removing the last one is a no-op. Reloads the feed/hero to reflect the change.
+     */
+    fun toggleBranch(code: String) {
+        val next = if (code in selectedBranches) selectedBranches - code else selectedBranches + code
+        if (next.isEmpty()) return
+        selectedBranches = next
+        repo.setBranches(com.foundation.scpreader.data.Branch.fromCodes(next))
+        // Fresh branch mix → re-pull discovery so it reflects the new sources immediately.
+        scpOfDay = null; trending = null
+        loadHero()
+        if (screen == Screen.Home && feedIsRandom) loadFeed()
+    }
 
     private fun daySeed(): Long {
         val cal = java.util.Calendar.getInstance()
@@ -396,6 +420,16 @@ class AppState(
         if (screen == Screen.Search) viewModelScope.launch { repo.recordSearchRecent(item) }
         readerItem = item; readerMenuOpen = false; article = null; articleLoading = true
         readerScrollRestore = 0; readerScrollConsumed = false
+        translationSuggestion = null
+        // Offer a translation in one of the user's selected branches, if this article has one there
+        // (and it wasn't already dismissed). Runs alongside the article fetch, so it never blocks.
+        if (item.url !in translationDismissed) {
+            viewModelScope.launch {
+                val suggestion = runCatching { repo.translationInSelectedBranches(item) }.getOrNull()
+                // Guard against a stale result if the user already navigated to another article.
+                if (suggestion != null && readerItem?.url == item.url) translationSuggestion = suggestion
+            }
+        }
         viewModelScope.launch { repo.recordRecent(item) }
         viewModelScope.launch { readerScrollRestore = repo.recentScroll(item.url) }
         viewModelScope.launch {
@@ -446,7 +480,20 @@ class AppState(
         )
     }
 
-    fun closeReader() { readerItem = null; readerMenuOpen = false; article = null }
+    fun closeReader() { readerItem = null; readerMenuOpen = false; article = null; translationSuggestion = null }
+
+    /** Open the offered translation in the reader (replaces the current article). */
+    fun openTranslation() {
+        val target = translationSuggestion?.item ?: return
+        translationSuggestion = null
+        openReaderItem(target)
+    }
+
+    /** Dismiss the translation prompt for the current article; it won't reappear this session. */
+    fun dismissTranslation() {
+        readerItem?.let { translationDismissed.add(it.url) }
+        translationSuggestion = null
+    }
 
     fun toggleReaderMenu() { readerMenuOpen = if (readerDl.state == ReaderDlState.Downloading) false else !readerMenuOpen }
     fun closeReaderMenu() { readerMenuOpen = false }
