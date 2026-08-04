@@ -3,9 +3,12 @@ package com.foundation.scpreader.network
 import com.foundation.scpreader.data.ContentBlock
 import com.foundation.scpreader.data.InlineSpan
 import com.foundation.scpreader.data.TabPane
+import com.foundation.scpreader.data.TableCell
+import com.foundation.scpreader.data.TableRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Node
 import org.jsoup.nodes.TextNode
@@ -33,8 +36,17 @@ class ScpScraper {
             .timeout(20_000)
             .followRedirects(true)
             .get()
+        parse(doc, url)
+    }
+
+    /**
+     * Turn an already-fetched [doc] into structured [ContentBlock]s. Split out from [fetch] so the
+     * parsing is exercisable off-device (no network) — the wiki markup shifts under us periodically,
+     * so this is the seam the parser tests drive.
+     */
+    fun parse(doc: Document, url: String): Scraped {
         val content = doc.getElementById("page-content")
-            ?: return@withContext Scraped(emptyList(), null, "", null)
+            ?: return Scraped(emptyList(), null, "", null)
 
         // Map each footnote id ("footnote-1") to its body text, keyed before we strip the footer
         // chrome, so inline `sup.footnoteref` markers (handled in inlineSpans()) can carry their
@@ -164,6 +176,7 @@ class ScpScraper {
                     tag == "p" -> addText(child, bullet = false, out)
                     tag == "blockquote" || (tag == "div" && child.hasClass("blockquote")) -> addQuote(child, out)
                     tag == "ul" || tag == "ol" -> child.select("> li").forEach { addText(it, bullet = true, out) }
+                    tag == "table" -> parseTable(child, footnoteText)?.let { if (seen.add("tbl:${it.rows.size}:${child.text().take(80)}")) out.add(it) }
                     tag == "div" -> walk(child, out) // section wrapper — recurse to keep order
                     else -> {}
                 }
@@ -208,7 +221,7 @@ class ScpScraper {
             if (crosslinks.size >= 8) break
         }
         val links = crosslinks.map { (slug, text) -> "http://$branchHost/$slug" to text }
-        Scraped(blocks, objectClass, excerpt, firstImage, links)
+        return Scraped(blocks, objectClass, excerpt, firstImage, links)
     }
 
     /**
@@ -338,6 +351,31 @@ class ScpScraper {
             out.addAll(inlineSpans(ch, footnotes).ifEmpty { listOf(InlineSpan(ch.text())) })
         }
         return out
+    }
+
+    /**
+     * Parse a `<table>` into rows/cells, preserving inline formatting per cell. Returns null for
+     * tables we don't want to render as a grid: empty ones, and Wikidot ListPages navigation boxes
+     * (`.list-pages-box`), whose cells are whole article-list widgets that flatten into unreadable
+     * walls of text rather than tabular data.
+     */
+    private fun parseTable(table: Element, footnotes: Map<String, String>): ContentBlock.Table? {
+        if (table.selectFirst(".list-pages-box") != null) return null
+        // Only this table's own rows — skip rows belonging to a table nested inside a cell, which
+        // are picked up when that inner table is walked in its own right.
+        val trs = table.select("tr").filter { tr ->
+            tr.parents().takeWhile { it !== table }.none { it.tagName() == "table" }
+        }
+        val rows = trs.mapNotNull { tr ->
+            val cellEls = tr.children().filter { it.tagName() == "td" || it.tagName() == "th" }
+            if (cellEls.isEmpty()) return@mapNotNull null
+            val cells = cellEls.map { cell ->
+                TableCell(cell.text().trim(), inlineSpans(cell, footnotes))
+            }
+            if (cells.all { it.text.isEmpty() }) null
+            else TableRow(cells, header = cellEls.all { it.tagName() == "th" })
+        }
+        return if (rows.isEmpty()) null else ContentBlock.Table(rows)
     }
 
     private fun absImage(img: Element): String? {

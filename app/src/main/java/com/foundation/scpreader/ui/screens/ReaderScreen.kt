@@ -460,6 +460,35 @@ private fun ArticleBlock(
                 }
             }
         }
+        is ContentBlock.Table -> {
+            // Fixed-width cells so columns line up; the whole grid scrolls horizontally when the
+            // rows are wider than the screen (SCP test-logs and taxonomy tables are often wide).
+            val cellWidth = 168.dp
+            Column(
+                Modifier.padding(top = 16.dp).clip(RoundedCornerShape(10.dp))
+                    .border(1.dp, c.outlineVariant, RoundedCornerShape(10.dp))
+                    .horizontalScroll(rememberScrollState()),
+            ) {
+                block.rows.forEachIndexed { ri, row ->
+                    Row(
+                        Modifier.background(if (row.header) c.surfaceContainer else Color.Transparent).height(IntrinsicSize.Min),
+                    ) {
+                        row.cells.forEachIndexed { ci, cell ->
+                            Box(
+                                Modifier.width(cellWidth).fillMaxHeight()
+                                    .border(0.5.dp, c.outlineVariant).padding(horizontal = 12.dp, vertical = 10.dp),
+                            ) {
+                                Text(
+                                    markup(cell.spans, cell.text, c.primary, onLink, c.onSurface, "$key.r$ri.c$ci", revealed, onReveal, onFootnoteTap),
+                                    fontSize = (bodyPx - 2).sp, lineHeight = ((bodyPx - 2) * 1.5f).sp,
+                                    fontWeight = if (row.header) FontWeight.SemiBold else FontWeight.Normal, color = c.onSurface,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         is ContentBlock.Tabs -> {
             var selected by remember(key) { androidx.compose.runtime.mutableStateOf(0) }
             Column(Modifier.padding(top = 14.dp).fillMaxWidth()) {

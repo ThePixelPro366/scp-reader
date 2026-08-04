@@ -65,6 +65,14 @@ data class InlineSpan(
 @Serializable
 data class TabPane(val label: String, val blocks: List<ContentBlock>)
 
+/** One cell of a [ContentBlock.Table]; [spans] carries inline markup, [text] is the plain fallback. */
+@Serializable
+data class TableCell(val text: String, val spans: List<InlineSpan> = emptyList())
+
+/** One row of a [ContentBlock.Table]; [header] marks a `<th>`-only row (rendered emphasised). */
+@Serializable
+data class TableRow(val cells: List<TableCell>, val header: Boolean = false)
+
 /** A structured block of a rendered article, produced by the scraper. */
 @Serializable
 sealed interface ContentBlock {
@@ -79,6 +87,8 @@ sealed interface ContentBlock {
     @Serializable @SerialName("c") data class Collapsible(val title: String, val blocks: List<ContentBlock>) : ContentBlock
     /** A wiki `[[tabview]]` (e.g. SCP-2317's "Iteration" tabs): exactly one [panes] entry shown at a time. */
     @Serializable @SerialName("tabs") data class Tabs(val panes: List<TabPane>) : ContentBlock
+    /** A wiki table (`[[table]]` / triple-pipe markup); rendered as a horizontally-scrollable grid. */
+    @Serializable @SerialName("tbl") data class Table(val rows: List<TableRow>) : ContentBlock
     /** Anomaly Classification System bar; any field may be absent depending on the article. */
     @Serializable @SerialName("acs") data class Acs(
         val containment: String? = null,
