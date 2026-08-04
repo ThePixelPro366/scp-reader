@@ -217,6 +217,7 @@ private fun AppRoot(app: AppState) {
         if (app.randomOpen) RandomSheet(app)
         if (app.recommendSheetOpen) com.foundation.scpreader.ui.screens.RecommendSheet(app)
         if (app.playerFullScreen) com.foundation.scpreader.ui.screens.PlayerScreen(app)
+        if (app.showWhatsNew) com.foundation.scpreader.ui.screens.WhatsNewSheet(app)
 
         // Cold-start access screen: stays until the app is actually ready (not a fixed timer),
         // with a safety fallback so it never hangs.

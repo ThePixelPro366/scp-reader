@@ -462,6 +462,20 @@ private fun UpdatesSection(app: AppState) {
         }
     }
 
+    Divider1()
+    Row(
+        Modifier.fillMaxWidth().clickable { app.openWhatsNew() }.padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(AppIcons.Article, null, Modifier.size(24.dp), tint = c.onSurfaceVariant)
+        Column(Modifier.weight(1f)) {
+            Text("What's new", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface)
+            Text("See this version's release notes", fontSize = 13.sp, color = c.onSurfaceVariant)
+        }
+        Icon(AppIcons.NorthEast, null, Modifier.size(18.dp), tint = c.onSurfaceVariant)
+    }
+
     Column(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 16.dp)) {
         when (val status = app.updateStatus) {
             UpdateCheckResult.Idle, UpdateCheckResult.Checking -> {}

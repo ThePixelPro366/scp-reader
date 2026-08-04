@@ -82,6 +82,35 @@ class UpdateManager(private val client: OkHttpClient) {
     }
 
     /**
+     * Fetches a release's description (Markdown body) for the "What's new" sheet. Tries the exact
+     * tag first (`v<version>` and bare `<version>`), then falls back to the latest release, so a
+     * dev/debug build with no matching tag still shows something. Unauthenticated — public repo.
+     */
+    suspend fun releaseNotes(version: String): String? = withContext(Dispatchers.IO) {
+        val v = version.trim().removePrefix("v").removePrefix("V").substringBefore('-')
+        val urls = listOf(
+            "https://api.github.com/repos/$REPO/releases/tags/v$v",
+            "https://api.github.com/repos/$REPO/releases/tags/$v",
+            "https://api.github.com/repos/$REPO/releases/latest",
+        )
+        for (url in urls) {
+            val body = runCatching {
+                val req = Request.Builder()
+                    .url(url)
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", API_VERSION)
+                    .build()
+                client.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@use null
+                    json.decodeFromString(GithubRelease.serializer(), resp.body?.string().orEmpty()).body
+                }
+            }.getOrNull()
+            if (!body.isNullOrBlank()) return@withContext body.trim()
+        }
+        null
+    }
+
+    /**
      * Downloads [asset]'s binary to [dest] from its API `url` (not `browser_download_url`), with an
      * `application/octet-stream` Accept header; GitHub 302s to a pre-signed, unauthenticated blob URL
      * that OkHttp follows automatically.

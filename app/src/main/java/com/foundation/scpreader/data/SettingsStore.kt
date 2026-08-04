@@ -30,6 +30,8 @@ data class Settings(
     val sponsorCategories: Set<String> = com.foundation.scpreader.playback.SponsorCategory.DEFAULT_ENABLED,
     /** Regional/language branches (by [Branch.code]) that feed the random/of-the-day discovery. */
     val selectedBranches: Set<String> = setOf(Branch.EN.code),
+    /** App version whose "What's new" sheet has already been shown; blank on a fresh install. */
+    val whatsNewSeen: String = "",
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -50,6 +52,7 @@ class SettingsStore(private val context: Context) {
         val hero = stringPreferencesKey("hero_mode")
         val sponsorCats = stringSetPreferencesKey("sponsor_categories")
         val branches = stringSetPreferencesKey("selected_branches")
+        val whatsNewSeen = stringPreferencesKey("whats_new_seen")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { p ->
@@ -67,6 +70,7 @@ class SettingsStore(private val context: Context) {
             heroMode = p[Keys.hero]?.let { runCatching { HeroMode.valueOf(it) }.getOrNull() } ?: HeroMode.ContinueReading,
             sponsorCategories = p[Keys.sponsorCats] ?: com.foundation.scpreader.playback.SponsorCategory.DEFAULT_ENABLED,
             selectedBranches = p[Keys.branches] ?: setOf(Branch.EN.code),
+            whatsNewSeen = p[Keys.whatsNewSeen] ?: "",
         )
     }
 
@@ -85,6 +89,7 @@ class SettingsStore(private val context: Context) {
             p[Keys.hero] = s.heroMode.name
             p[Keys.sponsorCats] = s.sponsorCategories
             p[Keys.branches] = s.selectedBranches
+            p[Keys.whatsNewSeen] = s.whatsNewSeen
         }
     }
 }

@@ -77,6 +77,12 @@ class AppState(
     // Set when Settings is opened via the update banner so it auto-scrolls to the Updates section.
     var scrollSettingsToUpdates by mutableStateOf(false)
 
+    // ---- "What's new" sheet (the current build's GitHub release description) ----
+    private var whatsNewSeen by mutableStateOf("")
+    var whatsNewNotes by mutableStateOf<String?>(null); private set
+    var whatsNewLoading by mutableStateOf(false); private set
+    var showWhatsNew by mutableStateOf(false); private set
+
     // ---- friends / recommendations (anonymous device token; backend in /webserver) ----
     var friendCode by mutableStateOf<String?>(null); private set
     var friendsList by mutableStateOf<List<com.foundation.scpreader.network.FriendsApi.Friend>>(emptyList()); private set
@@ -216,6 +222,7 @@ class AppState(
         viewModelScope.launch {
             applySettings(settingsStore.settings.first())
             settingsLoaded = true
+            maybeShowWhatsNew()
             loadFeed()
             loadHero()
             androidx.compose.runtime.snapshotFlow { currentSettings() }.collect { settingsStore.save(it) }
@@ -229,6 +236,7 @@ class AppState(
         excludedClasses = s.excludedClasses; heroMode = s.heroMode
         sponsorCategories = s.sponsorCategories
         selectedBranches = s.selectedBranches
+        whatsNewSeen = s.whatsNewSeen
         repo.setWifiOnly(s.wifiOnly)
         repo.setBranches(com.foundation.scpreader.data.Branch.fromCodes(s.selectedBranches))
     }
@@ -236,7 +244,7 @@ class AppState(
     private fun currentSettings() = Settings(
         themeMode, dynamicColor, amoled, seed, fontScale, loadImages, wifiOnly,
         downloadPref, autoDownloadBookmarks, excludedClasses, heroMode, sponsorCategories,
-        selectedBranches,
+        selectedBranches, whatsNewSeen,
     )
 
     /**
@@ -607,6 +615,38 @@ class AppState(
     fun toggleSponsorCategory(category: String) {
         sponsorCategories = if (category in sponsorCategories) sponsorCategories - category else sponsorCategories + category
     }
+
+    // ---- "What's new" ----
+    /**
+     * After an update (stored seen-version differs from the running build), pull this build's GitHub
+     * release description and show it once. A fresh install is recorded silently — no sheet, since
+     * there's nothing "new" to a first-time user.
+     */
+    private fun maybeShowWhatsNew() {
+        val current = BuildConfig.VERSION_NAME
+        if (whatsNewSeen == current) return
+        val firstRun = whatsNewSeen.isBlank()
+        whatsNewSeen = current // persisted via currentSettings; only attempt once per version
+        if (firstRun) return
+        viewModelScope.launch {
+            whatsNewLoading = true
+            whatsNewNotes = runCatching { updateManager.releaseNotes(current) }.getOrNull()
+            whatsNewLoading = false
+            if (whatsNewNotes != null) showWhatsNew = true
+        }
+    }
+
+    /** Manual "What's new" entry (Settings): fetch this build's release notes and show the sheet. */
+    fun openWhatsNew() {
+        showWhatsNew = true
+        if (whatsNewNotes == null && !whatsNewLoading) viewModelScope.launch {
+            whatsNewLoading = true
+            whatsNewNotes = runCatching { updateManager.releaseNotes(BuildConfig.VERSION_NAME) }.getOrNull()
+            whatsNewLoading = false
+        }
+    }
+
+    fun dismissWhatsNew() { showWhatsNew = false }
 
     // ---- in-app updates ----
     /** Manual "Check for updates" entry point, also run silently once on app start. No credentials needed. */
