@@ -213,7 +213,10 @@ private fun AppRoot(app: AppState) {
             if (!app.offlineMode) BottomNav(app)
         }
 
-        app.readerItem?.let { item -> ReaderScreen(app, item) }
+        // While the original-theme web view is open it fully covers the reader, so drop the reader
+        // from composition — its scroll/image/lifecycle work would otherwise compete for the main
+        // thread and make the WebView scroll stutter.
+        if (app.themeViewItem == null) app.readerItem?.let { item -> ReaderScreen(app, item) }
         app.themeViewItem?.let { item -> com.foundation.scpreader.ui.screens.ThemeWebView(app, item) }
         if (app.randomOpen) RandomSheet(app)
         if (app.recommendSheetOpen) com.foundation.scpreader.ui.screens.RecommendSheet(app)

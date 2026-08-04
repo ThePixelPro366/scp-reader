@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,18 +55,23 @@ fun ThemeWebView(app: AppState, item: ScpItem) {
     val c = LocalScpScheme.current
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val url = item.url.replaceFirst("http://", "https://")
-    var loading by remember { mutableStateOf(true) }
+    // Only the FIRST load shows the spinner — later in-page navigations must not throw a full-screen
+    // overlay over the page mid-scroll (that read as the scroll "randomly stopping").
+    var initialLoad by remember { mutableStateOf(true) }
+    val surfaceArgb = c.surface.toArgb()
 
     // Retained across recompositions so the page isn't reloaded; destroyed on close.
     val webView = remember {
         WebView(ctx).apply {
+            // Match the app surface so there's no white/black flash before the page paints — the
+            // stray dark strip at the bottom came from a reserved inset the WebView now fills itself.
+            setBackgroundColor(surfaceArgb)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.loadWithOverviewMode = true
             settings.useWideViewPort = true
             webViewClient = object : WebViewClient() {
-                override fun onPageStarted(view: WebView?, u: String?, favicon: android.graphics.Bitmap?) { loading = true }
-                override fun onPageFinished(view: WebView?, u: String?) { loading = false }
+                override fun onPageFinished(view: WebView?, u: String?) { initialLoad = false }
                 // Keep wiki pages inside this view; hand anything else (external links) to a browser.
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val target = request?.url?.toString() ?: return false
@@ -79,6 +86,9 @@ fun ThemeWebView(app: AppState, item: ScpItem) {
             loadUrl(url)
         }
     }
+
+    // Destroy the WebView when the screen leaves the composition, freeing its render thread.
+    DisposableEffect(Unit) { onDispose { webView.destroy() } }
 
     BackHandler {
         if (webView.canGoBack()) webView.goBack() else app.closeArticleTheme()
@@ -98,14 +108,15 @@ fun ThemeWebView(app: AppState, item: ScpItem) {
                 Icon(AppIcons.NorthEast, "Open in browser", Modifier.size(22.dp), tint = c.onSurface)
             }
         }
+        // The WebView fills the rest and scrolls under the gesture/navigation bar (like a browser),
+        // so there's no separate dark inset strip below it.
         Box(Modifier.weight(1f).fillMaxWidth()) {
             AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
-            if (loading) {
+            if (initialLoad) {
                 Box(Modifier.fillMaxSize().background(c.surface), contentAlignment = Alignment.Center) {
                     ScpSpinner(size = 84)
                 }
             }
         }
-        Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars))
     }
 }
