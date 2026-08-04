@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.map
 data class Settings(
     val themeMode: ThemeMode = ThemeMode.Light,
     val dynamicColor: Boolean = true,
+    val amoled: Boolean = false,
     val seed: SeedKey = SeedKey.Violet,
     val fontScale: Float = 1f,
     val loadImages: Boolean = true,
@@ -38,6 +39,7 @@ class SettingsStore(private val context: Context) {
     private object Keys {
         val theme = stringPreferencesKey("theme")
         val dynamic = booleanPreferencesKey("dynamic_color")
+        val amoled = booleanPreferencesKey("amoled")
         val seed = stringPreferencesKey("seed")
         val font = floatPreferencesKey("font_scale")
         val images = booleanPreferencesKey("load_images")
@@ -54,6 +56,7 @@ class SettingsStore(private val context: Context) {
         Settings(
             themeMode = p[Keys.theme]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.Light,
             dynamicColor = p[Keys.dynamic] ?: true,
+            amoled = p[Keys.amoled] ?: false,
             seed = p[Keys.seed]?.let { runCatching { SeedKey.valueOf(it) }.getOrNull() } ?: SeedKey.Violet,
             fontScale = p[Keys.font] ?: 1f,
             loadImages = p[Keys.images] ?: true,
@@ -71,6 +74,7 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { p ->
             p[Keys.theme] = s.themeMode.name
             p[Keys.dynamic] = s.dynamicColor
+            p[Keys.amoled] = s.amoled
             p[Keys.seed] = s.seed.name
             p[Keys.font] = s.fontScale
             p[Keys.images] = s.loadImages

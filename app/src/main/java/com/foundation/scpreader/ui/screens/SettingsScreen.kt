@@ -121,6 +121,19 @@ fun SettingsScreen(app: AppState) {
                     PillSwitch(app.dynamicColor)
                 }
             }
+            Divider1()
+            Row(
+                Modifier.fillMaxWidth().clickable { app.toggleAmoled() }.padding(horizontal = 18.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Icon(AppIcons.DarkMode, null, Modifier.size(24.dp), tint = c.onSurfaceVariant)
+                Column(Modifier.weight(1f)) {
+                    Text("AMOLED black", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface)
+                    Text("True-black surfaces in dark mode", fontSize = 13.sp, color = c.onSurfaceVariant)
+                }
+                PillSwitch(app.amoled)
+            }
             if (!supportsDynamic || !app.dynamicColor) {
                 Divider1()
                 Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 18.dp)) {

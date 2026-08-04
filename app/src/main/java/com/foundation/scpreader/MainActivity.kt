@@ -73,6 +73,7 @@ import com.foundation.scpreader.ui.theme.ProvideScpScheme
 import com.foundation.scpreader.ui.theme.buildScheme
 import com.foundation.scpreader.ui.theme.materialColorScheme
 import com.foundation.scpreader.ui.theme.schemeFromMaterial
+import com.foundation.scpreader.ui.theme.toAmoled
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
@@ -111,9 +112,14 @@ class MainActivity : ComponentActivity() {
             } else {
                 materialColorScheme(buildScheme(app.seed, dynamicColor = true, isDark = app.isDark), app.isDark)
             }
-            val scpScheme = if (useWallpaper) schemeFromMaterial(material, app.isDark)
+            val baseScheme = if (useWallpaper) schemeFromMaterial(material, app.isDark)
             else buildScheme(app.seed, dynamicColor = true, isDark = app.isDark)
-            MaterialTheme(colorScheme = material) {
+            // AMOLED true-black only applies in dark mode; re-derive the M3 colors from it too so
+            // stock components (sliders, sheets, progress) sit on the same black surfaces.
+            val amoled = app.isDark && app.amoled
+            val scpScheme = if (amoled) baseScheme.toAmoled() else baseScheme
+            val materialScheme = if (amoled) materialColorScheme(scpScheme, app.isDark) else material
+            MaterialTheme(colorScheme = materialScheme) {
                 ProvideScpScheme(scpScheme) { AppRoot(app) }
             }
         }

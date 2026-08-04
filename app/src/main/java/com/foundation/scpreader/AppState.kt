@@ -59,6 +59,8 @@ class AppState(
     var themeMode by mutableStateOf(ThemeMode.Light)
     var systemDark by mutableStateOf(false)
     var dynamicColor by mutableStateOf(true)
+    /** True-black surfaces for AMOLED screens; only takes effect in dark mode. */
+    var amoled by mutableStateOf(false)
     var seed by mutableStateOf(SeedKey.Violet)
 
     var fontScale by mutableStateOf(1f)
@@ -221,7 +223,7 @@ class AppState(
     }
 
     private fun applySettings(s: Settings) {
-        themeMode = s.themeMode; dynamicColor = s.dynamicColor; seed = s.seed
+        themeMode = s.themeMode; dynamicColor = s.dynamicColor; amoled = s.amoled; seed = s.seed
         fontScale = s.fontScale; loadImages = s.loadImages; wifiOnly = s.wifiOnly
         downloadPref = s.downloadPref; autoDownloadBookmarks = s.autoDownloadBookmarks
         excludedClasses = s.excludedClasses; heroMode = s.heroMode
@@ -232,7 +234,7 @@ class AppState(
     }
 
     private fun currentSettings() = Settings(
-        themeMode, dynamicColor, seed, fontScale, loadImages, wifiOnly,
+        themeMode, dynamicColor, amoled, seed, fontScale, loadImages, wifiOnly,
         downloadPref, autoDownloadBookmarks, excludedClasses, heroMode, sponsorCategories,
         selectedBranches,
     )
@@ -760,6 +762,7 @@ class AppState(
     fun goSearch() { screen = Screen.Search }
     fun togglePauseAll() { downloadsPaused = !downloadsPaused; repo.setPaused(downloadsPaused) }
     fun toggleDynamic() { dynamicColor = !dynamicColor }
+    fun toggleAmoled() { amoled = !amoled }
     fun selectSeed(k: SeedKey) { seed = k }
     fun incFont() { fontScale = (fontScale + 0.1f).coerceAtMost(1.4f).round2() }
     fun decFont() { fontScale = (fontScale - 0.1f).coerceAtLeast(0.85f).round2() }
