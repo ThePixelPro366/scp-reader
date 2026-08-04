@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -233,8 +234,15 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
                     val revealed = remember(item.url) { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
                     val onReveal: (String) -> Unit = { k -> revealed[k] = revealed[k] != true }
                     val onFootnoteTap: (String) -> Unit = { text -> footnotePopup = text }
-                    blocks.forEachIndexed { idx, block ->
-                        ArticleBlock(app, block, "b$idx", bodyPx, headPx, onLink, revealed, onReveal, onFootnoteTap)
+                    // Wrap the body in a SelectionContainer so readers can select and copy article
+                    // text. Tappable runs (links, footnote markers, redaction reveals) keep working —
+                    // Compose routes a tap to the link and a drag to text selection.
+                    SelectionContainer {
+                        Column(Modifier.fillMaxWidth()) {
+                            blocks.forEachIndexed { idx, block ->
+                                ArticleBlock(app, block, "b$idx", bodyPx, headPx, onLink, revealed, onReveal, onFootnoteTap)
+                            }
+                        }
                     }
                     if (blocks.isEmpty()) {
                         Text("No content available.", fontSize = bodyPx.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 24.dp))
