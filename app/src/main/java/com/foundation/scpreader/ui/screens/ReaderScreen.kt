@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -48,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -105,6 +108,8 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
     val onLink: (String) -> Unit = { url -> app.openLink(url, linkCtx) }
     // Body text of the currently-tapped footnote marker, shown in a bottom popup; null = closed.
     var footnotePopup by remember(item.url) { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    // The tapped image (model + caption) shown in the full-screen zoomable lightbox; null = closed.
+    var lightbox by remember(item.url) { androidx.compose.runtime.mutableStateOf<Pair<Any, String>?>(null) }
 
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
@@ -234,13 +239,14 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
                     val revealed = remember(item.url) { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
                     val onReveal: (String) -> Unit = { k -> revealed[k] = revealed[k] != true }
                     val onFootnoteTap: (String) -> Unit = { text -> footnotePopup = text }
+                    val onImageTap: (Any, String) -> Unit = { model, caption -> lightbox = model to caption }
                     // Wrap the body in a SelectionContainer so readers can select and copy article
                     // text. Tappable runs (links, footnote markers, redaction reveals) keep working —
                     // Compose routes a tap to the link and a drag to text selection.
                     SelectionContainer {
                         Column(Modifier.fillMaxWidth()) {
                             blocks.forEachIndexed { idx, block ->
-                                ArticleBlock(app, block, "b$idx", bodyPx, headPx, onLink, revealed, onReveal, onFootnoteTap)
+                                ArticleBlock(app, block, "b$idx", bodyPx, headPx, onLink, revealed, onReveal, onFootnoteTap, onImageTap)
                             }
                         }
                     }
@@ -326,6 +332,48 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
 
     if (app.readerMenuOpen) ReaderDownloadMenu(app, hasEpisode = episode != null, offlineLabel = offlineLabel)
     footnotePopup?.let { text -> FootnotePopup(text) { footnotePopup = null } }
+    lightbox?.let { (model, caption) -> ImageLightbox(model, caption) { lightbox = null } }
+}
+
+/** Full-screen, pinch-to-zoom / pan viewer for a tapped article image. Tap the scrim or ✕ to close. */
+@Composable
+private fun ImageLightbox(model: Any, caption: String, onDismiss: () -> Unit) {
+    var scale by remember { androidx.compose.runtime.mutableStateOf(1f) }
+    var offset by remember { androidx.compose.runtime.mutableStateOf(Offset.Zero) }
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        scale = (scale * zoomChange).coerceIn(1f, 5f)
+        // Only pan while zoomed in; snap back to centre at 1× so the image can't drift off-screen.
+        offset = if (scale > 1f) offset + panChange else Offset.Zero
+    }
+    Box(
+        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.97f)).clickable(
+            indication = null,
+            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+        ) { onDismiss() },
+        contentAlignment = Alignment.Center,
+    ) {
+        AsyncImage(
+            model = model, contentDescription = caption, contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxWidth()
+                .graphicsLayer { scaleX = scale; scaleY = scale; translationX = offset.x; translationY = offset.y }
+                .transformable(transformState),
+        )
+        if (caption.isNotEmpty()) {
+            Text(
+                caption, fontSize = 13.sp, fontStyle = FontStyle.Italic, color = Color.White.copy(alpha = 0.85f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 24.dp, vertical = 20.dp),
+            )
+        }
+        Box(
+            Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.statusBars).padding(8.dp)
+                .size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)).clickable { onDismiss() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(AppIcons.Close, "Close", Modifier.size(22.dp), tint = Color.White)
+        }
+    }
 }
 
 /** Bottom sheet-style popup for a tapped footnote marker — tap the scrim or the close icon to dismiss. */
@@ -431,6 +479,7 @@ private fun ArticleBlock(
     revealed: Map<String, Boolean>,
     onReveal: (String) -> Unit,
     onFootnoteTap: (String) -> Unit = {},
+    onImageTap: (Any, String) -> Unit = { _, _ -> },
 ) {
     val c = LocalScpScheme.current
     when (block) {
@@ -441,10 +490,12 @@ private fun ArticleBlock(
             Text(markup(block.spans, block.text, c.primary, onLink, c.onSurface, key, revealed, onReveal, onFootnoteTap), fontSize = bodyPx.sp, lineHeight = (bodyPx * 1.62f).sp, color = c.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
         }
         is ContentBlock.Image -> if (app.loadImages) {
+            // Prefer the offline-cached file (downloaded articles) over the live wiki URL.
+            val model: Any = block.localPath?.let(::File) ?: block.url
             Column(Modifier.padding(top = 20.dp)) {
-                // Prefer the offline-cached file (downloaded articles) over the live wiki URL.
-                AsyncImage(model = block.localPath?.let(::File) ?: block.url, contentDescription = block.caption, contentScale = ContentScale.FillWidth,
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.surfaceCHigh))
+                AsyncImage(model = model, contentDescription = block.caption, contentScale = ContentScale.FillWidth,
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.surfaceCHigh)
+                        .clickable { onImageTap(model, block.caption) })
                 if (block.caption.isNotEmpty()) Text(block.caption, fontSize = 12.sp, fontStyle = FontStyle.Italic, color = c.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             }
         }
@@ -462,7 +513,7 @@ private fun ArticleBlock(
                 if (expanded) {
                     Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp)) {
                         block.blocks.forEachIndexed { i, inner ->
-                            ArticleBlock(app, inner, "$key.$i", bodyPx, headPx, onLink, revealed, onReveal, onFootnoteTap)
+                            ArticleBlock(app, inner, "$key.$i", bodyPx, headPx, onLink, revealed, onReveal, onFootnoteTap, onImageTap)
                         }
                     }
                 }
@@ -516,7 +567,7 @@ private fun ArticleBlock(
                 if (pane != null) {
                     Column(Modifier.padding(top = 4.dp)) {
                         pane.blocks.forEachIndexed { i, inner ->
-                            ArticleBlock(app, inner, "$key.t$selected.$i", bodyPx, headPx, onLink, revealed, onReveal, onFootnoteTap)
+                            ArticleBlock(app, inner, "$key.t$selected.$i", bodyPx, headPx, onLink, revealed, onReveal, onFootnoteTap, onImageTap)
                         }
                     }
                 }
