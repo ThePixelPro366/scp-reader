@@ -41,6 +41,23 @@ class ScpScraperTest {
     }
 
     @Test
+    fun detectsCustomThemeFromThemeMarkers() {
+        // A bespoke font declaration alone marks a custom theme.
+        val fontFace = parse("<style>@font-face { font-family: 'Departure Mono'; }</style><p>Body text here for the article.</p>")
+        assertTrue("@font-face should flag a custom theme", fontFace.hasCustomTheme)
+
+        // Theme CSS custom properties also count.
+        val swatch = parse("<style>:root { --swatch-primary: 133,0,5; }</style><p>Body text here for the article.</p>")
+        assertTrue("--swatch* vars should flag a custom theme", swatch.hasCustomTheme)
+    }
+
+    @Test
+    fun plainArticleHasNoCustomTheme() {
+        val plain = parse("<p>Item #: SCP-0000</p><p>Object Class: Safe</p><p>A plain, unstyled article body.</p>")
+        assertTrue("a plain article should not be flagged as themed", !plain.hasCustomTheme)
+    }
+
+    @Test
     fun skipsListPagesNavigationTables() {
         val html = """
             <table style="width: 100%;">

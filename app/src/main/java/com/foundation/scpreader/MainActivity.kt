@@ -214,6 +214,7 @@ private fun AppRoot(app: AppState) {
         }
 
         app.readerItem?.let { item -> ReaderScreen(app, item) }
+        app.themeViewItem?.let { item -> com.foundation.scpreader.ui.screens.ThemeWebView(app, item) }
         if (app.randomOpen) RandomSheet(app)
         if (app.recommendSheetOpen) com.foundation.scpreader.ui.screens.RecommendSheet(app)
         if (app.playerFullScreen) com.foundation.scpreader.ui.screens.PlayerScreen(app)

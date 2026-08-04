@@ -233,6 +233,25 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
                         MetaCard(Modifier.weight(1f), "Offline", offlineLabel, offlineColor)
                     }
 
+                    // This page ships a bespoke visual theme the native renderer can't reproduce, so
+                    // surface it up top (before the body) — offer a web view of the original, fully-
+                    // styled page. Only shown when the scraper flags a custom theme (detectCustomTheme).
+                    if (app.article?.hasCustomTheme == true) {
+                        Row(
+                            Modifier.padding(top = 16.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                                .background(c.primaryContainer).clickable { app.openArticleTheme() }
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Icon(AppIcons.Palette, null, Modifier.size(22.dp), tint = c.onPrimaryContainer)
+                            Column(Modifier.weight(1f)) {
+                                Text("View original theme", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.onPrimaryContainer)
+                                Text("This article has custom styling — open the styled page", fontSize = 12.sp, color = c.onPrimaryContainer.copy(alpha = 0.85f))
+                            }
+                            Icon(AppIcons.NorthEast, null, Modifier.size(20.dp), tint = c.onPrimaryContainer)
+                        }
+                    }
+
                     // article body blocks
                     val blocks = app.article?.blocks.orEmpty()
                     // Revealed redaction keys, reset per article.

@@ -133,7 +133,7 @@ class ScpRepository(
             val num = if (slug.matches(Regex("scp-\\d+.*"))) "SCP-" + slug.removePrefix("scp-").uppercase() else slug.uppercase()
             ScpItem(url = url, number = num, title = text.ifBlank { num }, objectClass = "Unknown", typeLabel = "SCP", tags = emptyList())
         }
-        return Article(decorate(listOf(resolved)).first(), blocks, crosslinks)
+        return Article(decorate(listOf(resolved)).first(), blocks, crosslinks, scraped?.hasCustomTheme == true)
     }
 
     /**

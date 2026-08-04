@@ -492,6 +492,12 @@ class AppState(
 
     fun closeReader() { readerItem = null; readerMenuOpen = false; article = null; translationSuggestion = null }
 
+    // ---- original-theme web view ----
+    // The article being shown in the embedded WebView with its real page styling; null = closed.
+    var themeViewItem by mutableStateOf<ScpItem?>(null); private set
+    fun openArticleTheme() { readerItem?.let { themeViewItem = it } }
+    fun closeArticleTheme() { themeViewItem = null }
+
     /** Open the offered translation in the reader (replaces the current article). */
     fun openTranslation() {
         val target = translationSuggestion?.item ?: return

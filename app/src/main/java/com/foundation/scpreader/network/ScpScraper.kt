@@ -27,6 +27,7 @@ class ScpScraper {
         val excerpt: String,
         val imageUrl: String?,
         val crosslinks: List<Pair<String, String>> = emptyList(), // (url, anchor text)
+        val hasCustomTheme: Boolean = false,
     )
 
     suspend fun fetch(url: String): Scraped = withContext(Dispatchers.IO) {
@@ -67,6 +68,11 @@ class ScpScraper {
 
         // Parse the ACS (Anomaly Classification System) bar, if present, before it's stripped.
         val acs = parseAcs(content)
+
+        // Detect a bespoke page theme (custom CSS/fonts/backgrounds) BEFORE the <style> blocks are
+        // stripped below — the native block renderer can't reproduce these, so the reader offers a
+        // web view of the original instead.
+        val hasCustomTheme = detectCustomTheme(doc)
 
         // Remove non-article chrome. Collapsibles are turned into structured blocks during the
         // walk, using the title text from `.collapsible-block-folded` (kept — see below).
@@ -221,7 +227,30 @@ class ScpScraper {
             if (crosslinks.size >= 8) break
         }
         val links = crosslinks.map { (slug, text) -> "http://$branchHost/$slug" to text }
-        return Scraped(blocks, objectClass, excerpt, firstImage, links)
+        return Scraped(blocks, objectClass, excerpt, firstImage, links, hasCustomTheme)
+    }
+
+    /**
+     * Heuristic: does this page carry a custom visual theme, versus the site's default skin? No
+     * single marker catches every themed article, so this ORs several signals (verified against
+     * plain pages, which trip none of them, and heavily-themed ones, which each trip at least one):
+     *   - more `<style>` blocks than the ~3-4 the default skin ships;
+     *   - theme CSS custom properties (`--swatch*`, `--theme-base`);
+     *   - `@font-face` (bespoke fonts are always a custom theme);
+     *   - extra theme/black-highlighter `@import`s beyond the 2 base ones;
+     *   - a named `[[include :…:theme:…]]` (renders a `theme` class / import).
+     * Biased toward detection: a false positive merely offers the web view on a near-default page,
+     * whereas a miss hides the theme entirely.
+     */
+    private fun detectCustomTheme(doc: Document): Boolean {
+        val styles = doc.select("style")
+        val css = styles.joinToString("\n") { it.data() }.lowercase()
+        val themeImports = Regex("@import\\s+url\\([^)]*(theme|black-highlighter)[^)]*\\)").findAll(css).count()
+        return styles.size >= 5 ||
+            css.contains("--swatch") || css.contains("--theme-base") ||
+            css.contains("@font-face") ||
+            themeImports > 2 ||
+            css.contains("theme:")
     }
 
     /**
