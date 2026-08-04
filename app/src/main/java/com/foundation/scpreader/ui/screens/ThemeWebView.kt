@@ -70,6 +70,19 @@ fun ThemeWebView(app: AppState, item: ScpItem) {
             settings.domStorageEnabled = true
             settings.loadWithOverviewMode = true
             settings.useWideViewPort = true
+            // Keep the scroll gesture with the WebView. Hosted inside Compose, the ancestor view
+            // (AndroidComposeView) can intercept an in-progress drag/fling, which read as the scroll
+            // "randomly stopping". Asking the parent not to intercept while a touch is down fixes it.
+            isNestedScrollingEnabled = false
+            setOnTouchListener { v, event ->
+                when (event.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_MOVE ->
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
+                        v.parent?.requestDisallowInterceptTouchEvent(false)
+                }
+                false // don't consume — let the WebView scroll normally
+            }
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, u: String?) { initialLoad = false }
                 // Keep wiki pages inside this view; hand anything else (external links) to a browser.
