@@ -32,6 +32,9 @@ data class Settings(
     val selectedBranches: Set<String> = setOf(Branch.EN.code),
     /** App version whose "What's new" sheet has already been shown; blank on a fresh install. */
     val whatsNewSeen: String = "",
+    /** Signed-in Wikidot session cookie + username (for in-app voting); blank when logged out. */
+    val wikidotSession: String = "",
+    val wikidotUser: String = "",
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -53,6 +56,8 @@ class SettingsStore(private val context: Context) {
         val sponsorCats = stringSetPreferencesKey("sponsor_categories")
         val branches = stringSetPreferencesKey("selected_branches")
         val whatsNewSeen = stringPreferencesKey("whats_new_seen")
+        val wikidotSession = stringPreferencesKey("wikidot_session")
+        val wikidotUser = stringPreferencesKey("wikidot_user")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { p ->
@@ -71,6 +76,8 @@ class SettingsStore(private val context: Context) {
             sponsorCategories = p[Keys.sponsorCats] ?: com.foundation.scpreader.playback.SponsorCategory.DEFAULT_ENABLED,
             selectedBranches = p[Keys.branches] ?: setOf(Branch.EN.code),
             whatsNewSeen = p[Keys.whatsNewSeen] ?: "",
+            wikidotSession = p[Keys.wikidotSession] ?: "",
+            wikidotUser = p[Keys.wikidotUser] ?: "",
         )
     }
 
@@ -90,6 +97,8 @@ class SettingsStore(private val context: Context) {
             p[Keys.sponsorCats] = s.sponsorCategories
             p[Keys.branches] = s.selectedBranches
             p[Keys.whatsNewSeen] = s.whatsNewSeen
+            p[Keys.wikidotSession] = s.wikidotSession
+            p[Keys.wikidotUser] = s.wikidotUser
         }
     }
 }

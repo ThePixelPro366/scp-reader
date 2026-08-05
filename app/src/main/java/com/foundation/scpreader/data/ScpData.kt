@@ -108,6 +108,10 @@ data class Article(
      * native block renderer can't reproduce — gates the reader's "View original theme" web action.
      */
     val hasCustomTheme: Boolean = false,
+    /** Wikidot numeric page id, needed to cast a rating; null when unknown (offline/older rows). */
+    val pageId: String? = null,
+    /** True for plus/minus (+1/-1) pages — gates whether the reader shows vote arrows. */
+    val pmRating: Boolean = false,
 )
 
 /** A same-article counterpart in another [Branch], surfaced by the reader's translation prompt. */

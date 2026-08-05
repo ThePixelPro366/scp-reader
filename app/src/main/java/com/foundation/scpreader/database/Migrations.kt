@@ -70,3 +70,13 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
         db.execSQL("ALTER TABLE `search_recents` ADD COLUMN `altTitle` TEXT")
     }
 }
+
+/** v8 -> v9: add the wikidot_votes table (the signed-in user's own +1/-1 per wiki page). */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `wikidot_votes` (" +
+                "`pageId` TEXT NOT NULL, `points` INTEGER NOT NULL, PRIMARY KEY(`pageId`))"
+        )
+    }
+}

@@ -76,8 +76,9 @@ interface DownloadDao {
     entities = [
         DownloadEntity::class, BookmarkEntity::class, RecentEntity::class, SearchRecentEntity::class,
         PlaybackPositionEntity::class, SponsorSegmentEntity::class, NarrationIndexEntity::class,
+        WikidotVoteEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -88,4 +89,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun playbackPositionDao(): PlaybackPositionDao
     abstract fun narrationIndexDao(): NarrationIndexDao
     abstract fun sponsorSegmentDao(): SponsorSegmentDao
+    abstract fun wikidotVoteDao(): WikidotVoteDao
 }

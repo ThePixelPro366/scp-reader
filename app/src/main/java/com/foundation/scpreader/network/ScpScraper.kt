@@ -28,6 +28,8 @@ class ScpScraper {
         val imageUrl: String?,
         val crosslinks: List<Pair<String, String>> = emptyList(), // (url, anchor text)
         val hasCustomTheme: Boolean = false,
+        val pageId: String? = null,     // Wikidot numeric page id (for the rating API); null if not found
+        val pmRating: Boolean = false,  // true when the page uses the plus/minus (+1/-1) rate widget
     )
 
     suspend fun fetch(url: String): Scraped = withContext(Dispatchers.IO) {
@@ -73,6 +75,12 @@ class ScpScraper {
         // stripped below — the native block renderer can't reproduce these, so the reader offers a
         // web view of the original instead.
         val hasCustomTheme = detectCustomTheme(doc)
+
+        // Wiki page id + rating type, read before the rate widget is stripped. pageId feeds the
+        // voting API; pmRating is true only for plus/minus (+1/-1) pages — star-rated pages get no
+        // vote controls (we simply don't find the up/down widget).
+        val pageId = Regex("WIKIREQUEST\\.info\\.pageId\\s*=\\s*(\\d+)").find(doc.html())?.groupValues?.get(1)
+        val pmRating = doc.selectFirst(".rateup, .ratedown") != null
 
         // Remove non-article chrome. Collapsibles are turned into structured blocks during the
         // walk, using the title text from `.collapsible-block-folded` (kept — see below).
@@ -227,7 +235,7 @@ class ScpScraper {
             if (crosslinks.size >= 8) break
         }
         val links = crosslinks.map { (slug, text) -> "http://$branchHost/$slug" to text }
-        return Scraped(blocks, objectClass, excerpt, firstImage, links, hasCustomTheme)
+        return Scraped(blocks, objectClass, excerpt, firstImage, links, hasCustomTheme, pageId, pmRating)
     }
 
     /**

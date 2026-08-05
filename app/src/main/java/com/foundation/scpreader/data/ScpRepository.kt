@@ -49,6 +49,8 @@ class ScpRepository(
     private val recentDao: RecentDao,
     private val searchRecentDao: SearchRecentDao,
     private val playbackDao: PlaybackPositionDao,
+    private val wikidotApi: com.foundation.scpreader.network.WikidotVoteApi,
+    private val wikidotVoteDao: com.foundation.scpreader.database.WikidotVoteDao,
     private val http: OkHttpClient,
     private val filesDir: File,
     private val scope: CoroutineScope,
@@ -66,6 +68,46 @@ class ScpRepository(
     // priority follows how the branches are listed in Settings.
     @Volatile private var branches: List<Branch> = listOf(Branch.EN)
     fun setBranches(list: List<Branch>) { branches = list.ifEmpty { listOf(Branch.EN) }.sortedBy { it.ordinal } }
+
+    // ---- Wikidot voting (the signed-in user's own +1/-1 on articles) ----
+    @Volatile private var wikidotSession: String? = null
+    /** Restore a saved session (from settings) so votes work across app restarts without re-login. */
+    fun setWikidotSession(session: String?) { wikidotSession = session?.takeIf { it.isNotBlank() } }
+    val wikidotLoggedIn: Boolean get() = wikidotSession != null
+
+    /** Log in with the user's own credentials; on success keeps the session for later votes. */
+    suspend fun wikidotLogin(user: String, password: String): Result<String> =
+        wikidotApi.login(user, password).onSuccess { wikidotSession = it }
+
+    fun wikidotLogout() {
+        wikidotSession = null
+        scope.launch { wikidotVoteDao.clearAll() }
+    }
+
+    /** The user's own vote for a page (+1/-1), or null; reactive so the reader arrows stay in sync. */
+    fun myVote(pageId: String): Flow<Int?> = wikidotVoteDao.observe(pageId)
+
+    suspend fun castVote(pageId: String, points: Int): com.foundation.scpreader.network.WikidotVoteApi.RateResult {
+        val session = wikidotSession ?: return com.foundation.scpreader.network.WikidotVoteApi.RateResult.NeedLogin
+        val result = wikidotApi.rate(session, pageId, points)
+        when (result) {
+            is com.foundation.scpreader.network.WikidotVoteApi.RateResult.Ok -> wikidotVoteDao.upsert(com.foundation.scpreader.database.WikidotVoteEntity(pageId, points))
+            is com.foundation.scpreader.network.WikidotVoteApi.RateResult.NeedLogin -> wikidotSession = null
+            else -> {}
+        }
+        return result
+    }
+
+    suspend fun clearVote(pageId: String): com.foundation.scpreader.network.WikidotVoteApi.RateResult {
+        val session = wikidotSession ?: return com.foundation.scpreader.network.WikidotVoteApi.RateResult.NeedLogin
+        val result = wikidotApi.cancel(session, pageId)
+        when (result) {
+            is com.foundation.scpreader.network.WikidotVoteApi.RateResult.Ok -> wikidotVoteDao.delete(pageId)
+            is com.foundation.scpreader.network.WikidotVoteApi.RateResult.NeedLogin -> wikidotSession = null
+            else -> {}
+        }
+        return result
+    }
 
     /** Set by AppState to surface background audio-download stage failures as a transient notice. */
     var onDownloadNotice: ((String) -> Unit)? = null
@@ -133,7 +175,10 @@ class ScpRepository(
             val num = if (slug.matches(Regex("scp-\\d+.*"))) "SCP-" + slug.removePrefix("scp-").uppercase() else slug.uppercase()
             ScpItem(url = url, number = num, title = text.ifBlank { num }, objectClass = "Unknown", typeLabel = "SCP", tags = emptyList())
         }
-        return Article(decorate(listOf(resolved)).first(), blocks, crosslinks, scraped?.hasCustomTheme == true)
+        return Article(
+            decorate(listOf(resolved)).first(), blocks, crosslinks,
+            scraped?.hasCustomTheme == true, scraped?.pageId, scraped?.pmRating == true,
+        )
     }
 
     /**
