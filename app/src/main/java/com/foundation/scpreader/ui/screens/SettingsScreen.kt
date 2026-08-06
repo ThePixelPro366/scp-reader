@@ -7,6 +7,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -298,6 +303,59 @@ fun SettingsScreen(app: AppState) {
         }
 
         // ---- Friends ----
+        // ---- Wikidot account (for in-app voting) ----
+        GroupLabel("Wikidot account")
+        SettingsCard {
+            val wikiCtx = androidx.compose.ui.platform.LocalContext.current
+            if (app.wikidotLoggedIn) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Icon(AppIcons.Group, null, Modifier.size(24.dp), tint = c.primary)
+                    Column(Modifier.weight(1f)) {
+                        Text("Signed in", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface)
+                        Text(app.wikidotUser, fontSize = 13.sp, color = c.onSurfaceVariant)
+                    }
+                }
+                Divider1()
+                Row(
+                    Modifier.fillMaxWidth().clickable { app.wikidotLogout() }.padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Icon(AppIcons.Close, null, Modifier.size(22.dp), tint = c.onSurfaceVariant)
+                    Text("Log out", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface)
+                }
+            } else {
+                var user by remember { mutableStateOf("") }
+                var pass by remember { mutableStateOf("") }
+                Text("Log in with your Wikidot account to vote on articles.", fontSize = 13.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 12.dp))
+                SettingsInput(user, "Username", onChange = { user = it })
+                Spacer(Modifier.height(10.dp))
+                SettingsInput(pass, "Password", password = true, onChange = { pass = it })
+                app.wikidotLoginError?.let { err ->
+                    Text(err, fontSize = 13.sp, color = Color(0xFFB3261E), modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 8.dp))
+                }
+                Row(Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(12.dp)).background(c.primary)
+                            .clickable(enabled = !app.wikidotLoggingIn) { app.wikidotLogin(user, pass) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (app.wikidotLoggingIn) ScpSpinner(size = 20)
+                        else Text("Log in", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.onPrimary)
+                    }
+                    Box(
+                        Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, c.outline, RoundedCornerShape(12.dp))
+                            .clickable { openUrl(wikiCtx, "https://www.wikidot.com/default--flow/login__CreateAccountScreen") },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("Create account", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.onSurface)
+                    }
+                }
+            }
+        }
+
         GroupLabel("Friends")
         SettingsCard {
             Text("Server URL", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 2.dp))
@@ -403,6 +461,29 @@ private fun GroupLabel(text: String) {
     val c = LocalScpScheme.current
     Text(text.uppercase(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp, color = c.primary,
         modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 8.dp))
+}
+
+/** A single-line boxed text input matching the Friends "Server URL" field styling. */
+@Composable
+private fun SettingsInput(value: String, placeholder: String, password: Boolean = false, onChange: (String) -> Unit) {
+    val c = LocalScpScheme.current
+    Box(
+        Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(48.dp).clip(RoundedCornerShape(12.dp))
+            .background(c.surface).border(1.dp, c.outlineVariant, RoundedCornerShape(12.dp)).padding(horizontal = 14.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (value.isEmpty()) Text(placeholder, fontSize = 14.sp, color = c.onSurfaceVariant)
+        androidx.compose.foundation.text.BasicTextField(
+            value = value, onValueChange = onChange, singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = c.onSurface),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(c.primary),
+            visualTransformation = if (password) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                keyboardType = if (password) androidx.compose.ui.text.input.KeyboardType.Password else androidx.compose.ui.text.input.KeyboardType.Text,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
 
 @Composable
