@@ -15,16 +15,20 @@ save articles to read offline, and play the narration when it's available.
 
 ## Features
 
-- Browse the archive with an SCP of the Day highlight and random-entry discovery, filtered by SCP, Tales or GoI
+- Browse the archive with an SCP of the Day highlight and random-entry discovery, filtered by SCP, Tales, GoI or series
+- Read across 19 SCP branches beyond the English wiki, with a prompt to open an article's translation in another branch
 - Full-text search across SCPs, tales and GoI documents, with a Top Rated / Recently Viewed zero-state before you type
-- Read articles with rendered collapsibles, redactions, the ACS bar and object-class badges, and follow wiki links inside the app
+- Rich reader: rendered collapsibles, tabs, tables, interactive footnotes, redactions, the ACS bar and object-class badges; in-app wiki links; selectable text; and tap an image to view it full-screen and zoom
+- Vote on articles — upvote, downvote or clear your vote — with your own Wikidot account
+- For articles with bespoke wiki styling, open a "View original theme" web view of the fully-styled page
 - Play YouTube-sourced narration in a full-screen player or the system media notification, with SponsorBlock segments (sponsor, intro, outro, filler and more) skipped automatically
-- Save articles and ad-free, SponsorBlock-trimmed narration for offline playback, with a storage breakdown and a browse-by-class filter in your library
+- Save articles (with offline images) and ad-free, SponsorBlock-trimmed narration for offline reading and playback, with a storage breakdown and a browse-by-class filter in your library
 - Queue and manage downloads — including bulk download of random, top-rated, a series or the entire archive
+- Recommend articles to friends and open the recommendations they send you
 - Bookmarks and a recently-viewed list
-- Adjustable text size, light/dark/auto themes and dynamic color from your wallpaper
+- Adjustable text size, light/dark/auto themes, an AMOLED black theme, and dynamic color from your wallpaper
 - Tune discovery: choose the home highlight and exclude object classes from random picks
-- Resumes where you left off
+- Resumes where you left off, and shows a What's New summary after each update
 - Checks for new releases and installs updates in-app
 
 ## Building
