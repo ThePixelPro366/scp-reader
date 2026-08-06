@@ -233,6 +233,8 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
                         MetaCard(Modifier.weight(1f), "Offline", offlineLabel, offlineColor)
                     }
 
+                    RatingBar(app, item)
+
                     // This page ships a bespoke visual theme the native renderer can't reproduce, so
                     // surface it up top (before the body) — offer a web view of the original, fully-
                     // styled page. Only shown when the scraper flags a custom theme (detectCustomTheme).
@@ -352,6 +354,119 @@ fun ReaderScreen(app: AppState, item: ScpItem) {
     if (app.readerMenuOpen) ReaderDownloadMenu(app, hasEpisode = episode != null, offlineLabel = offlineLabel)
     footnotePopup?.let { text -> FootnotePopup(text) { footnotePopup = null } }
     lightbox?.let { (model, caption) -> ImageLightbox(model, caption) { lightbox = null } }
+    if (app.voteLoginPromptOpen) VoteLoginPrompt(app)
+    app.voteChangeTarget?.let { target -> VoteChangeDialog(app, app.readerVote, target) }
+}
+
+/** Score (always shown) + plus/minus vote arrows and a Clear button (PM pages only). */
+@Composable
+private fun RatingBar(app: AppState, item: ScpItem) {
+    val c = LocalScpScheme.current
+    val score = app.readerScoreOverride ?: item.rating
+    val vote = app.readerVote
+    val pm = app.article?.pmRating == true
+    Row(
+        Modifier.padding(top = 16.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .border(1.dp, c.outlineVariant, RoundedCornerShape(16.dp)).padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("RATING", fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, color = c.onSurfaceVariant)
+            Text(if (score >= 0) "+$score" else "$score", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = c.onSurface)
+        }
+        if (pm) {
+            VoteArrow(AppIcons.KeyboardArrowUp, active = vote == 1) { app.onVote(1) }
+            VoteArrow(AppIcons.KeyboardArrowDown, active = vote == -1) { app.onVote(-1) }
+            val canClear = vote != null
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).clickable(enabled = canClear) { app.onClearVote() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(AppIcons.Close, "Clear vote", Modifier.size(20.dp), tint = if (canClear) c.onSurfaceVariant else c.outlineVariant.copy(alpha = 0.5f))
+            }
+        }
+    }
+}
+
+/** A vote arrow: muted by default, lit (white/onSurface) when it's the user's current vote. */
+@Composable
+private fun VoteArrow(icon: ImageVector, active: Boolean, onClick: () -> Unit) {
+    val c = LocalScpScheme.current
+    Box(
+        Modifier.size(40.dp).clip(CircleShape).background(if (active) c.surfaceCHighest else Color.Transparent).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, null, Modifier.size(28.dp), tint = if (active) c.onSurface else c.outlineVariant)
+    }
+}
+
+/** Prompt shown when tapping a vote while logged out: log in (in-app) or create an account (browser). */
+@Composable
+private fun VoteLoginPrompt(app: AppState) {
+    val c = LocalScpScheme.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)).clickable(
+        indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+    ) { app.dismissVoteLoginPrompt() })
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            Modifier.padding(28.dp).fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.surfaceCHigh).padding(22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("Log in to vote", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.onSurface)
+            Text(
+                "Voting uses your own Wikidot account. Log in, or create a free account on the wiki.",
+                fontSize = 14.sp, lineHeight = 20.sp, color = c.onSurfaceVariant, textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Box(
+                Modifier.padding(top = 18.dp).fillMaxWidth().height(46.dp).clip(RoundedCornerShape(13.dp))
+                    .background(c.primary).clickable { app.dismissVoteLoginPrompt(); app.go(com.foundation.scpreader.Screen.Settings) },
+                contentAlignment = Alignment.Center,
+            ) { Text("Log in", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.onPrimary) }
+            Box(
+                Modifier.padding(top = 10.dp).fillMaxWidth().height(46.dp).clip(RoundedCornerShape(13.dp))
+                    .border(1.dp, c.outline, RoundedCornerShape(13.dp))
+                    .clickable { openUrl(ctx, "https://www.wikidot.com/default--flow/login__CreateAccountScreen") },
+                contentAlignment = Alignment.Center,
+            ) { Text("Create an account", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface) }
+            Box(Modifier.padding(top = 6.dp).clip(RoundedCornerShape(10.dp)).clickable { app.dismissVoteLoginPrompt() }.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Text("Not now", fontSize = 14.sp, color = c.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/** Confirm switching an existing vote to the opposite value (mirrors the wiki's own prompt). */
+@Composable
+private fun VoteChangeDialog(app: AppState, current: Int?, target: Int) {
+    val c = LocalScpScheme.current
+    fun fmt(v: Int?) = when { v == null -> "—"; v >= 0 -> "+$v"; else -> "$v" }
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)).clickable(
+        indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+    ) { app.dismissVoteChange() })
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            Modifier.padding(28.dp).fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.surfaceCHigh).padding(22.dp),
+        ) {
+            Text("Change your vote?", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = c.onSurface)
+            Text(
+                "Change your ${fmt(current)} to ${fmt(target)} on this article?",
+                fontSize = 14.sp, lineHeight = 20.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp),
+            )
+            Row(Modifier.padding(top = 18.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(13.dp)).border(1.dp, c.outline, RoundedCornerShape(13.dp))
+                        .clickable { app.dismissVoteChange() },
+                    contentAlignment = Alignment.Center,
+                ) { Text("Cancel", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = c.onSurface) }
+                Box(
+                    Modifier.weight(1f).height(46.dp).clip(RoundedCornerShape(13.dp)).background(c.primary).clickable { app.confirmVoteChange() },
+                    contentAlignment = Alignment.Center,
+                ) { Text("Change", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.onPrimary) }
+            }
+        }
+    }
 }
 
 /** Full-screen, pinch-to-zoom / pan viewer for a tapped article image. Tap the scrim or ✕ to close. */

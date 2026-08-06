@@ -237,6 +237,8 @@ class AppState(
         sponsorCategories = s.sponsorCategories
         selectedBranches = s.selectedBranches
         whatsNewSeen = s.whatsNewSeen
+        wikidotSession = s.wikidotSession; wikidotUser = s.wikidotUser
+        repo.setWikidotSession(s.wikidotSession)
         repo.setWifiOnly(s.wifiOnly)
         repo.setBranches(com.foundation.scpreader.data.Branch.fromCodes(s.selectedBranches))
     }
@@ -244,7 +246,7 @@ class AppState(
     private fun currentSettings() = Settings(
         themeMode, dynamicColor, amoled, seed, fontScale, loadImages, wifiOnly,
         downloadPref, autoDownloadBookmarks, excludedClasses, heroMode, sponsorCategories,
-        selectedBranches, whatsNewSeen,
+        selectedBranches, whatsNewSeen, wikidotSession, wikidotUser,
     )
 
     /**
@@ -445,7 +447,7 @@ class AppState(
         viewModelScope.launch {
             if (episodes.isEmpty()) episodes = repo.episodes()
             runCatching { repo.article(item) }
-                .onSuccess { article = it; readerItem = it.item }
+                .onSuccess { article = it; readerItem = it.item; readerScoreOverride = null; startVoteObservation(it.pageId) }
                 .onFailure { articleLoading = false }
             articleLoading = false
         }
@@ -497,6 +499,84 @@ class AppState(
     var themeViewItem by mutableStateOf<ScpItem?>(null); private set
     fun openArticleTheme() { readerItem?.let { themeViewItem = it } }
     fun closeArticleTheme() { themeViewItem = null }
+
+    // ---- Wikidot voting ----
+    private var wikidotSession by mutableStateOf("")
+    var wikidotUser by mutableStateOf(""); private set
+    val wikidotLoggedIn: Boolean get() = wikidotSession.isNotBlank()
+    var wikidotLoggingIn by mutableStateOf(false); private set
+    var wikidotLoginError by mutableStateOf<String?>(null); private set
+    // The open article's own vote (+1/-1/null) and an authoritative score from the last vote reply.
+    var readerVote by mutableStateOf<Int?>(null); private set
+    var readerScoreOverride by mutableStateOf<Int?>(null); private set
+    private var voteJob: Job? = null
+    // Prompts: shown when voting while logged out, and to confirm switching an existing vote.
+    var voteLoginPromptOpen by mutableStateOf(false); private set
+    var voteChangeTarget by mutableStateOf<Int?>(null); private set
+
+    private fun startVoteObservation(pageId: String?) {
+        voteJob?.cancel()
+        readerVote = null
+        if (pageId == null) return
+        voteJob = viewModelScope.launch { repo.myVote(pageId).collect { readerVote = it } }
+    }
+
+    /** Arrow tap. Logged-out → prompt; same arrow → no-op (use Clear); opposite → confirm switch. */
+    fun onVote(points: Int) {
+        val pageId = article?.pageId ?: return
+        if (!wikidotLoggedIn) { voteLoginPromptOpen = true; return }
+        when {
+            readerVote == points -> {}                      // already your vote — removal is the Clear button
+            readerVote != null -> voteChangeTarget = points // switching → confirm, matching the site
+            else -> viewModelScope.launch { applyRate(pageId, points) }
+        }
+    }
+
+    /** Confirm switching an existing vote: cancel the old one, then cast the new (the site's flow). */
+    fun confirmVoteChange() {
+        val pageId = article?.pageId ?: return
+        val target = voteChangeTarget ?: return
+        voteChangeTarget = null
+        viewModelScope.launch { repo.clearVote(pageId); applyRate(pageId, target) }
+    }
+    fun dismissVoteChange() { voteChangeTarget = null }
+
+    fun onClearVote() {
+        val pageId = article?.pageId ?: return
+        if (readerVote == null) return
+        viewModelScope.launch { handleRate(repo.clearVote(pageId)) }
+    }
+
+    private suspend fun applyRate(pageId: String, points: Int) = handleRate(repo.castVote(pageId, points))
+
+    private fun handleRate(result: com.foundation.scpreader.network.WikidotVoteApi.RateResult) {
+        when (result) {
+            is com.foundation.scpreader.network.WikidotVoteApi.RateResult.Ok -> result.points?.let { readerScoreOverride = it }
+            is com.foundation.scpreader.network.WikidotVoteApi.RateResult.NeedLogin -> {
+                wikidotSession = ""; voteLoginPromptOpen = true; notice("Please log in again")
+            }
+            is com.foundation.scpreader.network.WikidotVoteApi.RateResult.AlreadyVoted -> notice("You've already rated this")
+            is com.foundation.scpreader.network.WikidotVoteApi.RateResult.Error -> notice(result.message)
+        }
+    }
+
+    fun dismissVoteLoginPrompt() { voteLoginPromptOpen = false }
+
+    fun wikidotLogin(user: String, password: String) {
+        if (user.isBlank() || password.isBlank()) { wikidotLoginError = "Enter your username and password"; return }
+        wikidotLoggingIn = true; wikidotLoginError = null
+        viewModelScope.launch {
+            repo.wikidotLogin(user.trim(), password).fold(
+                onSuccess = { session -> wikidotSession = session; wikidotUser = user.trim(); voteLoginPromptOpen = false },
+                onFailure = { wikidotLoginError = it.message ?: "Login failed" },
+            )
+            wikidotLoggingIn = false
+        }
+    }
+
+    fun wikidotLogout() {
+        repo.wikidotLogout(); wikidotSession = ""; wikidotUser = ""; readerVote = null; readerScoreOverride = null
+    }
 
     /** Open the offered translation in the reader (replaces the current article). */
     fun openTranslation() {
