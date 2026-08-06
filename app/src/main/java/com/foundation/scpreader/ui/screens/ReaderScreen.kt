@@ -421,7 +421,7 @@ private fun VoteLoginPrompt(app: AppState) {
             )
             Box(
                 Modifier.padding(top = 18.dp).fillMaxWidth().height(46.dp).clip(RoundedCornerShape(13.dp))
-                    .background(c.primary).clickable { app.dismissVoteLoginPrompt(); app.go(com.foundation.scpreader.Screen.Settings) },
+                    .background(c.primary).clickable { app.dismissVoteLoginPrompt(); app.scrollSettingsToWikidot = true; app.go(com.foundation.scpreader.Screen.Settings) },
                 contentAlignment = Alignment.Center,
             ) { Text("Log in", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.onPrimary) }
             Box(

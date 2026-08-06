@@ -12,6 +12,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -64,6 +66,8 @@ private val modeDefs = listOf(
 fun SettingsScreen(app: AppState) {
     val c = LocalScpScheme.current
     val scrollState = rememberScrollState()
+    // Content-relative top of the Wikidot account section, captured on layout (see its Modifier below).
+    var wikidotAnchorY by remember { mutableStateOf(0) }
     // Arriving from the update banner: jump to the Updates section at the bottom.
     androidx.compose.runtime.LaunchedEffect(app.scrollSettingsToUpdates) {
         if (app.scrollSettingsToUpdates) {
@@ -72,6 +76,14 @@ fun SettingsScreen(app: AppState) {
                 .first { it > 0 }
             scrollState.animateScrollTo(scrollState.maxValue)
             app.scrollSettingsToUpdates = false
+        }
+    }
+    // Arriving from the reader's "Log in to vote" prompt: scroll to the Wikidot account section.
+    androidx.compose.runtime.LaunchedEffect(app.scrollSettingsToWikidot) {
+        if (app.scrollSettingsToWikidot) {
+            androidx.compose.runtime.snapshotFlow { wikidotAnchorY }.first { it > 0 }
+            scrollState.animateScrollTo(wikidotAnchorY.coerceAtMost(scrollState.maxValue))
+            app.scrollSettingsToWikidot = false
         }
     }
     Column(Modifier.fillMaxWidth().verticalScroll(scrollState).padding(bottom = 108.dp)) {
@@ -304,6 +316,9 @@ fun SettingsScreen(app: AppState) {
 
         // ---- Friends ----
         // ---- Wikidot account (for in-app voting) ----
+        // Zero-height anchor: records this section's content-relative top so the "Log in to vote"
+        // prompt can scroll straight here.
+        Box(Modifier.fillMaxWidth().onGloballyPositioned { wikidotAnchorY = it.positionInParent().y.toInt() })
         GroupLabel("Wikidot account")
         SettingsCard {
             val wikiCtx = androidx.compose.ui.platform.LocalContext.current
@@ -329,7 +344,7 @@ fun SettingsScreen(app: AppState) {
             } else {
                 var user by remember { mutableStateOf("") }
                 var pass by remember { mutableStateOf("") }
-                Text("Log in with your Wikidot account to vote on articles.", fontSize = 13.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 12.dp))
+                Text("Log in with your Wikidot account to vote on articles. Your password isn't stored — only the login session is kept on this device.", fontSize = 13.sp, color = c.onSurfaceVariant, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 12.dp))
                 SettingsInput(user, "Username", onChange = { user = it })
                 Spacer(Modifier.height(10.dp))
                 SettingsInput(pass, "Password", password = true, onChange = { pass = it })

@@ -76,6 +76,8 @@ class AppState(
     var updateBannerDismissed by mutableStateOf(false)
     // Set when Settings is opened via the update banner so it auto-scrolls to the Updates section.
     var scrollSettingsToUpdates by mutableStateOf(false)
+    // Set when Settings is opened via the "Log in to vote" prompt so it scrolls to the account section.
+    var scrollSettingsToWikidot by mutableStateOf(false)
 
     // ---- "What's new" sheet (the current build's GitHub release description) ----
     private var whatsNewSeen by mutableStateOf("")
